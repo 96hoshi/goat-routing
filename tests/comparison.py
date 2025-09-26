@@ -1,20 +1,12 @@
 from datetime import datetime
 
 import httpx
-from coordinates import coordinates_list
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from src.core.config import settings
-from src.endpoints.v2.routing import router
+from tests.utils.commons import client, TIME_BENCH
+from coords.coordinates_aachen import coordinates_list
 
-app = FastAPI()
-app.include_router(router)
-client = TestClient(app)
-
-TIME_BENCH = "2025-08-28T08:00:00Z"
-
-
+# ---------- Motis Routing ---------- #
 def get_motis_route(origin, destination, time=TIME_BENCH):
     """
     Query the Motis API for a route between origin and destination.
@@ -83,6 +75,7 @@ def extract_motis_route_summary(result):
     }
 
 
+# ---------- Google Direction ---------- #
 def get_google_directions(
     origin,
     destination,
@@ -157,7 +150,8 @@ def extract_google_route_summary(directions_result):
     }
 
 
-def run_benchmark():
+# ---------- Benchmarking ---------- #
+def run_plausibility_test():
     print(
         f"{'Route':<5}| {'Motis Dur(s)':<12} | {'Google Dur(s)':<13} | "
         f"{'Motis Dist(m)':<14} | {'Google Dist(m)':<14} | "
@@ -201,4 +195,5 @@ def run_benchmark():
 
 
 if __name__ == "__main__":
-    run_benchmark()
+    run_plausibility_test()
+

@@ -1,5 +1,5 @@
 version: "3.9"
- 
+
 networks:
   proxy:
     name: goat
@@ -22,7 +22,8 @@ services:
       - "8000:8000"
     networks:
       proxy:
- 
+
+
   rabbitmq:
     image: rabbitmq:management
     ports:
@@ -30,12 +31,14 @@ services:
       - 15672:15672
     networks:
       proxy:
- 
+
+
   redis:
     image: redis:latest
     networks:
       proxy:
- 
+
+
   celery-worker:
     build: .
     command: celery -A src.core.worker worker --loglevel=info
@@ -49,6 +52,7 @@ services:
     networks:
       proxy:
 
+
   motis:
     image: nginx:alpine
     container_name: motis
@@ -56,11 +60,13 @@ services:
       - 8181:8080
     volumes:
       - mydata:/app/motis/data
+      - ./geodata:/app/motis/geodata
       - ./motis_entrypoint.sh:/app/entrypoint.sh:ro
     working_dir: /app/motis
-    command: ["/bin/sh", "/app/entrypoint.sh"]
+    command: [ "/bin/sh", "/app/entrypoint.sh" ]
     networks:
       proxy:
 
-volumes: 
+
+volumes:
   mydata:
