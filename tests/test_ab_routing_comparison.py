@@ -2,27 +2,41 @@ from datetime import datetime
 
 import httpx
 
-from src.core.config import settings
-from tests.utils.commons import client, TIME_BENCH
 from coords.coordinates_aachen import coordinates_list
+from src.core.config import settings
+from tests.utils.commons import TIME_BENCH, client, motis_payload, write_result
+
+PLAUSIBILITY_FILE = "service_comparison_results.csv"
+PLAUSIBILITY_HEADERS = [
+    "origin",
+    "destination",
+    "motis_duration",
+    "motis_distance",
+    "motis_modes",
+    "motis_vehicle_lines",
+    "motis_response_size",
+    "motis_num_routes",
+    "google_duration",
+    "google_distance",
+    "google_modes",
+    "google_vehicle_lines",
+    "google_response_size",
+    "google_num_routes",
+]
+
 
 # ---------- Motis Routing ---------- #
 def get_motis_route(origin, destination, time=TIME_BENCH):
-    """
-    Query the Motis API for a route between origin and destination.
-    """
-    motis_payload = {
-        "fromPlace": origin,
-        "toPlace": destination,
-        "time": time,
-    }
-
+    payload = motis_payload(origin, destination, time)
     try:
-        response = client.post("/ab-routing", json=motis_payload)
-        return response.json()
+        response = client.post("/ab-routing", json=payload)
+        response_size = len(response.content)
+        data = response.json()
+        num_routes = len(data.get("result", {}).get("itineraries", []))
+        return data, response_size, num_routes
     except Exception as e:
         print(f"Error calling AB-routing for {origin} -> {destination}: {e}")
-        return None
+        return None, None, 0
 
 
 def extract_motis_route_summary(result):
@@ -83,11 +97,6 @@ def get_google_directions(
     time=TIME_BENCH,
     api_key=str(settings.GOOGLE_API_KEY),
 ):
-    """
-    Calls Google Directions API using httpx and returns the JSON response.
-    Includes error handling for API call failures.
-    """
-    # Convert ISO8601 string to UNIX timestamp
     dt = datetime.fromisoformat(time.replace("Z", "+00:00"))
     departure_timestamp = int(dt.timestamp())
     params = {
@@ -98,18 +107,20 @@ def get_google_directions(
         "key": api_key,
     }
     url = str(settings.GOOGLE_DIRECTIONS_URL)
-
     try:
         with httpx.Client() as client_http:
             response = client_http.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            response_size = len(response.content)
+            data = response.json()
+            num_routes = len(data.get("routes", []))
+            return data, response_size, num_routes
     except httpx.HTTPError as e:
         print(f"HTTP Error occurred while calling Google Directions API: {e}")
-        return None
+        return None, None, 0
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-        return None
+        return None, None, 0
 
 
 def extract_google_route_summary(directions_result):
@@ -151,49 +162,43 @@ def extract_google_route_summary(directions_result):
 
 
 # ---------- Benchmarking ---------- #
-def run_plausibility_test():
-    print(
-        f"{'Route':<5}| {'Motis Dur(s)':<12} | {'Google Dur(s)':<13} | "
-        f"{'Motis Dist(m)':<14} | {'Google Dist(m)':<14} | "
-        f"{'Motis Modes':<20} | {'Google Modes':<20} | "
-        f"{'Motis Vehicles':<20} | {'Google Vehicles'}"
-    )
-    print("-" * 200)
-
-    for idx, (origin, destination) in enumerate(coordinates_list, start=1):
-        motis_result = get_motis_route(origin, destination)
-        motis_route = (
+def evaluate_service_responses():
+    for origin, destination in coordinates_list:
+        motis_result, motis_size, motis_num_routes = get_motis_route(
+            origin, destination
+        )
+        motis_summary = (
             extract_motis_route_summary(motis_result) if motis_result else None
         )
-        if not motis_route:
-            motis_route = {
-                "duration": "-",
-                "distance": "-",
-                "modes": [],
-                "vehicle_lines": [],
-            }
-
-        google_result = get_google_directions(origin, destination)
-        google_route = (
+        google_result, google_size, google_num_routes = get_google_directions(
+            origin, destination
+        )
+        google_summary = (
             extract_google_route_summary(google_result) if google_result else None
         )
-        if not google_route:
-            google_route = {
-                "duration": "-",
-                "distance": "-",
-                "modes": [],
-                "vehicle_lines": [],
-            }
 
-        print(
-            f"{idx:<5} |"
-            f"{motis_route['duration']:<12} | {google_route['duration']:<13} | "
-            f"{motis_route['distance']:<14} | {google_route['distance']:<14} | "
-            f"{','.join(motis_route['modes']):<20} | {','.join(google_route['modes']):<20} | "
-            f"{','.join(motis_route['vehicle_lines']):<20} | {','.join(google_route['vehicle_lines'])}"
-        )
+        row = {
+            "origin": origin,
+            "destination": destination,
+            "motis_duration": motis_summary["duration"] if motis_summary else "",
+            "motis_distance": motis_summary["distance"] if motis_summary else "",
+            "motis_modes": "|".join(motis_summary["modes"]) if motis_summary else "",
+            "motis_vehicle_lines": (
+                "|".join(motis_summary["vehicle_lines"]) if motis_summary else ""
+            ),
+            "motis_response_size": motis_size if motis_size is not None else "",
+            "motis_num_routes": motis_num_routes,
+            "google_duration": google_summary["duration"] if google_summary else "",
+            "google_distance": google_summary["distance"] if google_summary else "",
+            "google_modes": "|".join(google_summary["modes"]) if google_summary else "",
+            "google_vehicle_lines": (
+                "|".join(google_summary["vehicle_lines"]) if google_summary else ""
+            ),
+            "google_response_size": google_size if google_size is not None else "",
+            "google_num_routes": google_num_routes,
+        }
+        write_result(row, filename=PLAUSIBILITY_FILE, headers=PLAUSIBILITY_HEADERS)
 
 
 if __name__ == "__main__":
-    run_plausibility_test()
-
+    evaluate_service_responses()

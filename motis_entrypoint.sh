@@ -26,15 +26,8 @@ done
 echo "Using local map file: $MAP_FILE"
 echo "Using transfer map file: $TRANSFERS_FILE"
 
-if [ ! -f "data/config.yml" ]; then
-  echo "First run: setting up environment..."
-
-  ./motis config ${MAP_FILE} ${TRANSFERS_FILE}
-  ./motis import
-
-else
-  echo "Data folder exists, skipping setup..."
-fi
+./motis config ${MAP_FILE} ${TRANSFERS_FILE}
+./motis import
 
 # Run the server
 ./motis server -d data/

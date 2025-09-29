@@ -1,10 +1,10 @@
-
 import respx
 from httpx import Response
 
 from src.core.config import settings
 from src.schemas.ab_routing import motis_request_examples
 from tests.utils.commons import client
+
 
 @respx.mock
 def test_compute_ab_routing_success():

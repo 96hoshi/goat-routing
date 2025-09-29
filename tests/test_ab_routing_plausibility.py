@@ -1,15 +1,16 @@
 from datetime import datetime
+
 import httpx
 import pytest
 
 from coords.coordinates_mannheim import coordinates_list
 from src.core.config import settings
-from tests.utils.commons import client, TIME_BENCH
+from tests.utils.commons import TIME_BENCH, client, google_payload, motis_payload
 
 
 # ----------- Motis ----------- #
 def query_motis(origin, destination, time=TIME_BENCH):
-    payload = {"fromPlace": origin, "toPlace": destination, "time": time}
+    payload = motis_payload(origin, destination, time)
     try:
         response = client.post("/ab-routing", json=payload)
         response.raise_for_status()
@@ -81,14 +82,8 @@ def query_google(
     api_key=str(settings.GOOGLE_API_KEY),
 ):
     dt = datetime.fromisoformat(time.replace("Z", "+00:00"))
-    departure_timestamp = int(dt.timestamp())
-    params = {
-        "origin": origin,
-        "destination": destination,
-        "mode": mode,
-        "departure_time": departure_timestamp,
-        "key": api_key,
-    }
+    params = google_payload(origin, destination, mode, str(dt), api_key)
+
     url = str(settings.GOOGLE_DIRECTIONS_URL)
 
     def fetch(params):
@@ -158,7 +153,7 @@ def extract_google_route_summary(directions_result: dict):
 
 
 # ----------- Service registry ----------- #
-SERVICES = {
+ROUTING_SERVICES = {
     "motis": query_motis,
     "google": query_google,
 }
@@ -166,7 +161,7 @@ SERVICES = {
 
 # ----------- Tests ----------- #
 @pytest.mark.parametrize("origin,destination", coordinates_list)
-@pytest.mark.parametrize("service_name,service_fn", SERVICES.items())
+@pytest.mark.parametrize("service_name,service_fn", ROUTING_SERVICES.items())
 def test_route_plausibility(origin, destination, service_name, service_fn):
     """Check that each service returns plausible results."""
     result = service_fn(origin, destination)
@@ -184,7 +179,7 @@ def test_route_plausibility(origin, destination, service_name, service_fn):
 def test_cross_service_comparison(origin, destination):
     """Compare results between all services for the same OD pair."""
     results = {}
-    for name, fn in SERVICES.items():
+    for name, fn in ROUTING_SERVICES.items():
         results[name] = fn(origin, destination) or {
             "duration": None,
             "distance": None,
