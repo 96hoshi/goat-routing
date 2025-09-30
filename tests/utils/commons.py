@@ -6,15 +6,16 @@ from typing import Any, Dict
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from coords.coordinates_mannheim import coordinates_list
 from src.core.config import settings
 from src.endpoints.v2.routing import router
+from tests.coords.coords import mannheim_coordinates
 from tests.utils.benchmark_helpers import benchmark_google_requests, benchmark_requests
 
 # FastAPI test client setup
 app = FastAPI()
 app.include_router(router)
 client = TestClient(app)
+coordinates_list = mannheim_coordinates
 
 # Benchmark result file
 RESULT_FILE = "benchmark_results.csv"

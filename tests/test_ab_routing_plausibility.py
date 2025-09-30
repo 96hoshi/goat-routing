@@ -3,9 +3,14 @@ from datetime import datetime
 import httpx
 import pytest
 
-from coords.coordinates_mannheim import coordinates_list
 from src.core.config import settings
-from tests.utils.commons import TIME_BENCH, client, google_payload, motis_payload
+from tests.utils.commons import (
+    TIME_BENCH,
+    client,
+    coordinates_list,
+    google_payload,
+    motis_payload,
+)
 
 
 # ----------- Motis ----------- #

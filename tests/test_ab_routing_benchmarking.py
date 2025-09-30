@@ -1,7 +1,6 @@
 import pytest
 
-from coords.coordinates_mannheim import coordinates_list
-from tests.utils.commons import SERVICES, write_result
+from tests.utils.commons import SERVICES, coordinates_list, write_result
 
 BENCHMARK_FILE = "benchmark_results.csv"
 BENCHMARK_HEADERS = [

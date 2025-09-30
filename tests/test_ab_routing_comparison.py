@@ -2,9 +2,14 @@ from datetime import datetime
 
 import httpx
 
-from coords.coordinates_aachen import coordinates_list
 from src.core.config import settings
-from tests.utils.commons import TIME_BENCH, client, motis_payload, write_result
+from tests.utils.commons import (
+    TIME_BENCH,
+    client,
+    coordinates_list,
+    motis_payload,
+    write_result,
+)
 
 PLAUSIBILITY_FILE = "service_comparison_results.csv"
 PLAUSIBILITY_HEADERS = [
