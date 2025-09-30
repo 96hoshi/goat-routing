@@ -2,6 +2,7 @@ import math
 from datetime import datetime
 
 import httpx
+import polyline
 
 from src.core.config import settings
 from tests.utils.commons import (
@@ -22,6 +23,15 @@ def haversine(lat1, lon1, lat2, lon2):
         + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     )
     return 2 * R * math.asin(math.sqrt(a))
+
+
+def polyline_distance(points):
+    dist = 0
+    for i in range(1, len(points)):
+        dist += haversine(
+            points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]
+        )
+    return dist
 
 
 # ----------- Motis ----------- #
@@ -64,15 +74,12 @@ def extract_motis_route_summary(result):
     for leg in route.get("legs", []):
         if "distance" in leg:
             distance += leg["distance"]
-        elif "path" in leg:
-            for instruction in leg.get("path", []):
-                distance += instruction.get("distance", 0)
-        elif "summary" in leg:
-            distance += leg["summary"].get("distance", 0) or leg["summary"].get(
-                "length", 0
+        elif "legGeometry" in leg and "points" in leg["legGeometry"]:
+            pts = polyline.decode(
+                leg["legGeometry"]["points"], leg["legGeometry"].get("precision", 5)
             )
+            distance += polyline_distance(pts)
         elif "from" in leg and "to" in leg:
-            # Estimate using coordinates if available (MOTIS do not provide distance for transit legs)
             distance += haversine(
                 leg["from"]["lat"],
                 leg["from"]["lon"],
@@ -81,7 +88,6 @@ def extract_motis_route_summary(result):
             )
         else:
             print(f"Warning: No distance found for leg: {leg}")
-
     # Modes and vehicle lines
     modes, vehicle_lines = [], []
     for leg in route.get("legs", []):
