@@ -21,6 +21,7 @@ coordinates_list = mannheim_coordinates
 RESULT_FILE = "benchmark_results.csv"
 RESULT_HEADERS = []
 RESULT_DIR = "tests/results/"
+ROUTES_DIR = "tests/results/routes/"
 
 # Benchmark time: tomorrow at 08:00 UTC
 TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
@@ -30,7 +31,10 @@ TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
 
 # Motis payload builder
 def motis_payload(
-    origin: str, destination: str, time: str = TIME_BENCH
+    origin: str,
+    destination: str,
+    time: str = TIME_BENCH,
+    detailed_transfers: str = "false",
 ) -> Dict[str, str]:
     """
     Build a payload for the Motis routing API.
@@ -39,6 +43,7 @@ def motis_payload(
         "fromPlace": origin,
         "toPlace": destination,
         "time": time,
+        "detailedTransfers": detailed_transfers,
     }
 
 
@@ -84,6 +89,21 @@ def write_result(
         if not file_exists:
             writer.writeheader()
         writer.writerow(row)
+
+
+def write_response(row, filename: str, headers=None) -> None:
+    """
+    Write a single route to a JSON file in the routes directory.
+    """
+    # Ensure the routes directory exists
+    os.makedirs(ROUTES_DIR, exist_ok=True)
+    filepath = os.path.join(ROUTES_DIR, filename)
+    if headers is None:
+        headers = list(row.keys())
+    with open(filepath, "w") as f:
+        import json
+
+        json.dump(row, f, indent=2)
 
 
 SERVICES = [

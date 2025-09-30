@@ -30,6 +30,10 @@ def save_modes_and_vehicle_lines_table(route_labels, df):
         "google_duration",
         "motis_distance",
         "google_distance",
+        "motis_num_routes",
+        "google_num_routes",
+        "motis_response_size",
+        "google_response_size",
     ]
     table_df = df[table_rows].T
     table_df.columns = route_labels

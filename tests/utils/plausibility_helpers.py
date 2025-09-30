@@ -6,53 +6,40 @@ from src.core.config import settings
 from tests.utils.commons import (
     TIME_BENCH,
     client,
-    coordinates_list,
     motis_payload,
-    write_result,
+    write_response,
 )
 
-PLAUSIBILITY_FILE = "service_comparison_results.csv"
-PLAUSIBILITY_HEADERS = [
-    "origin",
-    "destination",
-    "motis_duration",
-    "motis_distance",
-    "motis_modes",
-    "motis_vehicle_lines",
-    "motis_response_size",
-    "motis_num_routes",
-    "google_duration",
-    "google_distance",
-    "google_modes",
-    "google_vehicle_lines",
-    "google_response_size",
-    "google_num_routes",
-]
 
-
-# ---------- Motis Routing ---------- #
-def get_motis_route(origin, destination, time=TIME_BENCH):
+# ----------- Motis ----------- #
+def query_motis(origin, destination, time=TIME_BENCH):
     payload = motis_payload(origin, destination, time)
     try:
         response = client.post("/ab-routing", json=payload)
         response_size = len(response.content)
         data = response.json()
-        num_routes = len(data.get("result", {}).get("itineraries", []))
-        return data, response_size, num_routes
+        write_response(data, filename="motis_{}_{}.txt".format(origin, destination))
+        return data, response_size
     except Exception as e:
         print(f"Error calling AB-routing for {origin} -> {destination}: {e}")
-        return None, None, 0
+        return None, None
 
 
 def extract_motis_route_summary(result):
     """
-    Extract only the first route summary from a Motis API response.
+    Extract the first available route summary from a Motis API response.
+    Handles both 'itineraries' (public transport) and 'direct' (walk/bike/car).
     """
     routes = result.get("result", {}).get("itineraries", [])
-    if not routes:
-        return None
-
-    route = routes[0]  # take first option only
+    if routes:
+        route = routes[0]
+    else:
+        # Try direct route if no itineraries
+        direct_routes = result.get("result", {}).get("direct", [])
+        if not direct_routes:
+            print("No route found:", result)
+            return None
+        route = direct_routes[0]
 
     # Total duration
     duration = route.get(
@@ -68,7 +55,6 @@ def extract_motis_route_summary(result):
             distance += leg["summary"].get("distance", 0) or leg["summary"].get(
                 "length", 0
             )
-
     # Modes and vehicle lines
     modes, vehicle_lines = [], []
     for leg in route.get("legs", []):
@@ -85,7 +71,6 @@ def extract_motis_route_summary(result):
         route_name = leg.get("routeShortName")
         if route_name:
             vehicle_lines.append(route_name)
-
     return {
         "duration": duration,
         "distance": distance,
@@ -94,8 +79,8 @@ def extract_motis_route_summary(result):
     }
 
 
-# ---------- Google Direction ---------- #
-def get_google_directions(
+# ----------- Google ----------- #
+def query_google(
     origin,
     destination,
     mode="transit",
@@ -110,6 +95,7 @@ def get_google_directions(
         "mode": mode,
         "departure_time": departure_timestamp,
         "key": api_key,
+        "alternatives": "true",  # default is 1
     }
     url = str(settings.GOOGLE_DIRECTIONS_URL)
     try:
@@ -118,14 +104,16 @@ def get_google_directions(
             response.raise_for_status()
             response_size = len(response.content)
             data = response.json()
-            num_routes = len(data.get("routes", []))
-            return data, response_size, num_routes
+            write_response(
+                data, filename="google_{}_{}.txt".format(origin, destination)
+            )
+            return data, response_size
     except httpx.HTTPError as e:
         print(f"HTTP Error occurred while calling Google Directions API: {e}")
-        return None, None, 0
+        return None, None
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-        return None, None, 0
+        return None, None
 
 
 def extract_google_route_summary(directions_result):
@@ -164,46 +152,3 @@ def extract_google_route_summary(directions_result):
         "modes": modes,
         "vehicle_lines": vehicle_lines,
     }
-
-
-# ---------- Benchmarking ---------- #
-def evaluate_service_responses():
-    for origin, destination in coordinates_list:
-        motis_result, motis_size, motis_num_routes = get_motis_route(
-            origin, destination
-        )
-        motis_summary = (
-            extract_motis_route_summary(motis_result) if motis_result else None
-        )
-        google_result, google_size, google_num_routes = get_google_directions(
-            origin, destination
-        )
-        google_summary = (
-            extract_google_route_summary(google_result) if google_result else None
-        )
-
-        row = {
-            "origin": origin,
-            "destination": destination,
-            "motis_duration": motis_summary["duration"] if motis_summary else "",
-            "motis_distance": motis_summary["distance"] if motis_summary else "",
-            "motis_modes": "|".join(motis_summary["modes"]) if motis_summary else "",
-            "motis_vehicle_lines": (
-                "|".join(motis_summary["vehicle_lines"]) if motis_summary else ""
-            ),
-            "motis_response_size": motis_size if motis_size is not None else "",
-            "motis_num_routes": motis_num_routes,
-            "google_duration": google_summary["duration"] if google_summary else "",
-            "google_distance": google_summary["distance"] if google_summary else "",
-            "google_modes": "|".join(google_summary["modes"]) if google_summary else "",
-            "google_vehicle_lines": (
-                "|".join(google_summary["vehicle_lines"]) if google_summary else ""
-            ),
-            "google_response_size": google_size if google_size is not None else "",
-            "google_num_routes": google_num_routes,
-        }
-        write_result(row, filename=PLAUSIBILITY_FILE, headers=PLAUSIBILITY_HEADERS)
-
-
-if __name__ == "__main__":
-    evaluate_service_responses()

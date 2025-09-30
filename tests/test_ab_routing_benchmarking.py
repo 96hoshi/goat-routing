@@ -29,7 +29,7 @@ def build_result_row(
 
 
 @pytest.mark.benchmark(group="ab_routing")
-@pytest.mark.parametrize("coord", coordinates_list[0:3])
+@pytest.mark.parametrize("coord", coordinates_list)
 @pytest.mark.parametrize("service", SERVICES)
 def test_compare_services_benchmark_with_coords(benchmark, coord, service):
     """
