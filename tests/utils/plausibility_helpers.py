@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 
 import httpx
@@ -9,6 +10,18 @@ from tests.utils.commons import (
     motis_payload,
     write_response,
 )
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371000  # meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = phi2 - phi1
+    dlambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    return 2 * R * math.asin(math.sqrt(a))
 
 
 # ----------- Motis ----------- #
@@ -51,10 +64,24 @@ def extract_motis_route_summary(result):
     for leg in route.get("legs", []):
         if "distance" in leg:
             distance += leg["distance"]
+        elif "path" in leg:
+            for instruction in leg.get("path", []):
+                distance += instruction.get("distance", 0)
         elif "summary" in leg:
             distance += leg["summary"].get("distance", 0) or leg["summary"].get(
                 "length", 0
             )
+        elif "from" in leg and "to" in leg:
+            # Estimate using coordinates if available (MOTIS do not provide distance for transit legs)
+            distance += haversine(
+                leg["from"]["lat"],
+                leg["from"]["lon"],
+                leg["to"]["lat"],
+                leg["to"]["lon"],
+            )
+        else:
+            print(f"Warning: No distance found for leg: {leg}")
+
     # Modes and vehicle lines
     modes, vehicle_lines = [], []
     for leg in route.get("legs", []):
