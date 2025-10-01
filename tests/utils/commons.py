@@ -21,7 +21,8 @@ coordinates_list = mannheim_coordinates
 RESULT_FILE = "benchmark_results.csv"
 RESULT_HEADERS = []
 RESULT_DIR = "tests/results/"
-ROUTES_DIR = "tests/results/routes/"
+RESPONSES_DIR = "tests/results/responses/"
+IMAGES_DIR = "tests/results/images/"
 
 # Benchmark time: tomorrow at 08:00 UTC
 TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
@@ -95,9 +96,9 @@ def write_response(row, filename: str, headers=None) -> None:
     """
     Write a single route to a JSON file in the routes directory.
     """
-    # Ensure the routes directory exists
-    os.makedirs(ROUTES_DIR, exist_ok=True)
-    filepath = os.path.join(ROUTES_DIR, filename)
+    # Ensure the responses directory exists
+    os.makedirs(RESPONSES_DIR, exist_ok=True)
+    filepath = os.path.join(RESPONSES_DIR, filename)
     if headers is None:
         headers = list(row.keys())
     with open(filepath, "w") as f:

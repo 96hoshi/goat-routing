@@ -3,8 +3,9 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 
-CSV_FILE = "tests/results/service_comparison_results.csv"
-IMAGES_DIR = "tests/results/images"
+from tests.utils.commons import IMAGES_DIR, RESULT_DIR
+
+COMPARISON_FILE = "service_comparison_results.csv"
 
 
 def plot_metric(route_labels, df, y1, y2, label1, label2, ylabel, title, filename):
@@ -37,14 +38,14 @@ def save_modes_and_vehicle_lines_table(route_labels, df):
     ]
     table_df = df[table_rows].T
     table_df.columns = route_labels
-    with open(os.path.join(IMAGES_DIR, "modes_and_vehicle_lines.txt"), "w") as f:
-        f.write(table_df.to_string())
+    table_df.to_csv(os.path.join(RESULT_DIR, "modes_and_vehicle_lines.csv"))
 
 
 def main():
     """Visualize Motis vs Google Directions results."""
     os.makedirs(IMAGES_DIR, exist_ok=True)
-    df = pd.read_csv(CSV_FILE, dtype=str, on_bad_lines="skip")
+    comparison_file_path = os.path.join(RESULT_DIR, COMPARISON_FILE)
+    df = pd.read_csv(comparison_file_path, dtype=str, on_bad_lines="skip")
 
     cols = [
         "motis_num_routes",
