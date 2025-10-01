@@ -1,7 +1,7 @@
 import pytest
 
 from tests.utils.commons import coordinates_list
-from tests.utils.plausibility_helpers import (
+from tests.utils.query_helpers import (
     extract_google_route_summary,
     extract_motis_route_summary,
     query_google,

@@ -16,6 +16,7 @@ def plot_metric(route_labels, df, y1, y2, label1, label2, ylabel, title, filenam
     plt.ylabel(ylabel)
     plt.title(title)
     plt.legend()
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
     plt.tight_layout()
     plt.savefig(os.path.join(IMAGES_DIR, filename))
     plt.close()
@@ -41,7 +42,7 @@ def save_modes_and_vehicle_lines_table(route_labels, df):
     table_df.to_csv(os.path.join(RESULT_DIR, "modes_and_vehicle_lines.csv"))
 
 
-def main():
+def visualize_comparison():
     """Visualize Motis vs Google Directions results."""
     os.makedirs(IMAGES_DIR, exist_ok=True)
     comparison_file_path = os.path.join(RESULT_DIR, COMPARISON_FILE)
@@ -60,6 +61,14 @@ def main():
     df[cols] = df[cols].apply(pd.to_numeric, errors="coerce")
 
     route_labels = [f"route{i+1}" for i in range(len(df))]
+
+    # Convert durations from seconds to minutes
+    df["motis_duration"] = df["motis_duration"] / 60
+    df["google_duration"] = df["google_duration"] / 60
+
+    # Convert distances from meters to kilometers
+    df["motis_distance"] = df["motis_distance"] / 1000
+    df["google_distance"] = df["google_distance"] / 1000
 
     # Plot Number of Routes
     plot_metric(
@@ -91,9 +100,9 @@ def main():
         df,
         "motis_duration",
         "google_duration",
-        "Motis Duration (s)",
-        "Google Duration (s)",
-        "Duration (seconds)",
+        "Motis Duration (min)",
+        "Google Duration (min)",
+        "Duration (minutes)",
         "Duration per Route",
         "durations.png",
     )
@@ -103,15 +112,12 @@ def main():
         df,
         "motis_distance",
         "google_distance",
-        "Motis Distance (m)",
-        "Google Distance (m)",
-        "Distance (meters)",
+        "Motis Distance (km)",
+        "Google Distance (km)",
+        "Distance (kilometers)",
         "Distance per Route",
         "distances.png",
     )
     # Save Modes and Vehicle Lines Table
     save_modes_and_vehicle_lines_table(route_labels, df)
-
-
-if __name__ == "__main__":
-    main()
+    print(f"Visualizations and tables saved in {IMAGES_DIR} and {RESULT_DIR}")

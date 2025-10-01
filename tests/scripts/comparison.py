@@ -2,12 +2,13 @@ from tests.utils.commons import (
     coordinates_list,
     write_result,
 )
-from tests.utils.plausibility_helpers import (
+from tests.utils.query_helpers import (
     extract_google_route_summary,
     extract_motis_route_summary,
     query_google,
     query_motis,
 )
+from tests.utils.visualize import visualize_comparison
 
 PLAUSIBILITY_FILE = "service_comparison_results.csv"
 PLAUSIBILITY_HEADERS = [
@@ -28,8 +29,8 @@ PLAUSIBILITY_HEADERS = [
 ]
 
 
-# ---------- Benchmarking ---------- #
 def evaluate_service_responses():
+    """Evaluate and compare routing service responses for all coordinate pairs."""
     for origin, destination in coordinates_list:
         motis_result, motis_size = query_motis(origin, destination)
         motis_num_routes = (
@@ -68,6 +69,7 @@ def evaluate_service_responses():
             "google_num_routes": google_num_routes,
         }
         write_result(row, filename=PLAUSIBILITY_FILE, headers=PLAUSIBILITY_HEADERS)
+    visualize_comparison()
 
 
 if __name__ == "__main__":
