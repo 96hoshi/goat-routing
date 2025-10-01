@@ -1,8 +1,20 @@
+# Ignore environment variables file
 .env
 /src/__pycache__/*
 /src/core/__pycache__/*
 poetry.lock
 
+# Byte-compiled / optimized / DLL files
+coverage.xml
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.benchmarks/
+__pycache__/
+
+# Ignore data directories
 /src/cache
 /geodata
 /tests/results
+/tests/.benchmarks
