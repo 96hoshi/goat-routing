@@ -4,13 +4,16 @@ from tests.utils.commons import coordinates_list
 from tests.utils.query_helpers import (
     extract_google_route_summary,
     extract_motis_route_summary,
+    extract_valhalla_route_summary,
     query_google,
     query_motis,
+    query_valhalla,
 )
 
 ROUTING_SERVICES = {
     "motis": (query_motis, extract_motis_route_summary),
     "google": (query_google, extract_google_route_summary),
+    "valhalla": (query_valhalla, extract_valhalla_route_summary),
 }
 
 

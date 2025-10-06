@@ -25,13 +25,11 @@ ENV CELERY_RESULT_EXPIRES 120
 
 
 
-# Install system dependencies
+# Install system dependencies and gdal binaries
 RUN apt-get update \
-    && apt-get -y install netcat-traditional gcc libpq-dev \
-    && apt-get clean
-
-# Install gdal binaries
-RUN apt-get update && apt-get install -y python3-dev gdal-bin libgdal-dev
+    && apt-get -y install netcat-traditional gcc libpq-dev python3-dev gdal-bin libgdal-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 # Install Poetry
 RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python && \
     cd /usr/local/bin && \
@@ -45,10 +43,10 @@ RUN curl -sSL https://raw.githubusercontent.com/celery/celery/master/extra/gener
 # Copy poetry.lock* in case it doesn't exist in the repo
 COPY ./pyproject.toml ./poetry.lock* /app/
 # Allow installing dev dependencies to run tests
-ARG INSTALL_DEV=false
-RUN bash -c "if [ $INSTALL_DEV == 'True' ] ; then apt-get update && apt-get install -y --no-install-recommends postgresql-client-15 ; fi"
-RUN bash -c "if [ $INSTALL_DEV == 'True' ] ; then poetry install --no-root ; else poetry install --no-root --only main ; fi"
-RUN bash -c "if [ $INSTALL_DEV == 'True' ] ; then poetry update; fi"
+ARG INSTALL_DEV=true
+
+RUN if [ "$INSTALL_DEV" = "true" ]; then poetry install --no-root ; else poetry install --no-root --only main ; fi
 COPY . /app
 
+# Run API server
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "6000"]

@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from typing import Any, Dict, Optional, Tuple
 
 import httpx
 import polyline
@@ -34,14 +35,14 @@ def polyline_distance(points):
     return dist
 
 
-# ----------- Motis ----------- #
+# -------------------------------------- Motis ------------------------------------ #
 def query_motis(origin, destination, time=TIME_BENCH):
     payload = motis_payload(origin, destination, time)
     try:
         response = client.post("/ab-routing", json=payload)
         response_size = len(response.content)
         data = response.json()
-        write_response(data, filename="motis_{}_{}.txt".format(origin, destination))
+        write_response(data, filename="motis_{}_{}.json".format(origin, destination))
         return data, response_size
     except Exception as e:
         print(f"Error calling AB-routing for {origin} -> {destination}: {e}")
@@ -112,7 +113,7 @@ def extract_motis_route_summary(result):
     }
 
 
-# ----------- Google ----------- #
+# --------------------------- Google ---------------------- #
 def query_google(
     origin,
     destination,
@@ -138,7 +139,7 @@ def query_google(
             response_size = len(response.content)
             data = response.json()
             write_response(
-                data, filename="google_{}_{}.txt".format(origin, destination)
+                data, filename="google_{}_{}.json".format(origin, destination)
             )
             return data, response_size
     except httpx.HTTPError as e:
@@ -184,4 +185,150 @@ def extract_google_route_summary(directions_result):
         "distance": distance,
         "modes": modes,
         "vehicle_lines": vehicle_lines,
+    }
+
+
+# -------------------------- Valhalla ---------------------- #
+def query_valhalla(
+    origin: str, destination: str, costing: str = "bus", **kwargs
+) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
+    """
+    Query Valhalla routing service with bus costing (transit-optimized routing).
+
+    Note: This Valhalla instance doesn't support multimodal/GTFS routing,
+    so we use bus costing to get transit-appropriate routing on streets.
+
+    Args:
+        origin: Origin coordinates as "lat,lon"
+        destination: Destination coordinates as "lat,lon"
+        costing: Routing profile (bus for transit-optimized, auto, pedestrian, bicycle)
+        **kwargs: Additional parameters
+
+    Returns:
+        Tuple of (response_data, response_size) or (None, None) on error
+    """
+    # Parse coordinates
+    origin_lat, origin_lon = map(float, origin.split(","))
+    dest_lat, dest_lon = map(float, destination.split(","))
+
+    payload = {
+        "locations": [
+            {"lat": origin_lat, "lon": origin_lon},
+            {"lat": dest_lat, "lon": dest_lon},
+        ],
+        "costing": costing,
+        "directions_options": {
+            "units": "kilometers",
+            "narrative": True,
+        },
+        **kwargs,
+    }
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(settings.VALHALLA_URL, json=payload)
+            response.raise_for_status()
+            response_size = len(response.content)
+            data = response.json()
+
+            # Save response for debugging
+            write_response(
+                data, filename=f"valhalla_{origin}_{destination}_{costing}.json"
+            )
+            return data, response_size
+
+    except httpx.HTTPError as e:
+        print(f"HTTP Error occurred while calling Valhalla API: {e}")
+        return None, None
+    except Exception as e:
+        print(f"Error calling Valhalla for {origin} -> {destination}: {e}")
+        return None, None
+
+
+def extract_valhalla_route_summary(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Extract route summary from Valhalla API response.
+
+    Args:
+        result: Valhalla API response
+
+    Returns:
+        Dictionary with duration, distance, modes, vehicle_lines, and route_details or None
+    """
+    if not result or "trip" not in result:
+        return None
+
+    trip = result["trip"]
+    legs = trip.get("legs", [])
+
+    if not legs:
+        return None
+
+    # Calculate totals from legs
+    total_time = trip.get("summary", {}).get("time", 0)  # in seconds
+    total_length = trip.get("summary", {}).get("length", 0)  # in km
+
+    # Extract bus routing information (street-level, not GTFS)
+    modes = []
+    vehicle_lines = []  # Will be empty since no GTFS data
+    street_names = []
+    bus_suitable_roads = []
+
+    for leg in legs:
+        # Extract travel mode/type
+        travel_type = leg.get("type", leg.get("summary", {}).get("travel_type", ""))
+        if travel_type and travel_type not in modes:
+            modes.append(travel_type)
+
+        # Extract detailed information from maneuvers
+        maneuvers = leg.get("maneuvers", [])
+        for maneuver in maneuvers:
+            # Check travel type for each maneuver
+            maneuver_travel_type = maneuver.get("travel_type")
+            if maneuver_travel_type and maneuver_travel_type not in modes:
+                modes.append(maneuver_travel_type)
+
+            # Extract street names from maneuvers
+            streets = []
+            if "street_names" in maneuver:
+                streets.extend(maneuver["street_names"])
+            if "begin_street_names" in maneuver:
+                streets.extend(maneuver["begin_street_names"])
+
+            # Add unique street names
+            for street in streets:
+                if street and street not in street_names:
+                    street_names.append(street)
+
+                    # Identify streets that are likely bus routes
+                    # Look for major roads, numbered routes, or typical transit corridors
+                    street_lower = street.lower()
+                    if any(
+                        indicator in street_lower
+                        for indicator in [
+                            "straße",
+                            "ring",
+                            "platz",
+                            "weg",
+                            "alle",
+                            "damm",
+                            "ufer",
+                            "b ",
+                            "l ",
+                            "k ",
+                        ]
+                    ):
+                        if street not in bus_suitable_roads:
+                            bus_suitable_roads.append(street)
+
+    return {
+        "duration": total_time,  # seconds
+        "distance": total_length * 1000,  # convert km to meters for consistency
+        "modes": modes,  # Travel modes (will show 'bus' for bus costing)
+        "vehicle_lines": vehicle_lines,  # Empty - no GTFS data available
+        "street_names": street_names[:10],  # First 10 streets used
+        "bus_suitable_roads": bus_suitable_roads[:5],  # Major roads suitable for buses
+        "total_streets": len(street_names),
+        "costing_used": "bus_no_gtfs",  # Indicate bus routing without GTFS
+        "note": "Bus costing used - shows transit-optimized routing on streets, not actual bus lines",
     }

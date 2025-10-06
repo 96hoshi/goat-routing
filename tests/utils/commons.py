@@ -9,7 +9,9 @@ from fastapi.testclient import TestClient
 from src.core.config import settings
 from src.endpoints.v2.routing import router
 from tests.coords.coords import mannheim_coordinates
-from tests.utils.benchmark_helpers import benchmark_google_requests, benchmark_requests
+from tests.utils.benchmark_helpers import (
+    benchmark_http_requests,
+)
 
 # FastAPI test client setup
 app = FastAPI()
@@ -72,6 +74,28 @@ def google_payload(
     }
 
 
+def valhalla_payload(
+    origin: str, destination: str, costing: str = "bus", **kwargs
+) -> Dict[str, Any]:
+    """Build payload for Valhalla routing API with bus costing.
+    Note: This instance doesn't support multimodal/GTFS, so we use bus costing
+    for transit-optimized routing on streets.
+    """
+    # Parse coordinates from "lat,lon" format
+    origin_lat, origin_lon = map(float, origin.split(","))
+    dest_lat, dest_lon = map(float, destination.split(","))
+
+    return {
+        "locations": [
+            {"lat": origin_lat, "lon": origin_lon},
+            {"lat": dest_lat, "lon": dest_lon},
+        ],
+        "costing": costing,
+        "directions_options": {"units": "kilometers"},
+        **kwargs,
+    }
+
+
 def write_result(
     row: Dict[str, Any], filename: str = RESULT_FILE, headers=None
 ) -> None:
@@ -112,15 +136,21 @@ SERVICES = [
         "name": "motis",
         "endpoint": "/ab-routing",
         "payload_builder": motis_payload,
-        "benchmark_func": benchmark_requests,
+        "benchmark_func": benchmark_http_requests,
         "client": client,
     },
     {
         "name": "google",
         "endpoint": str(settings.GOOGLE_DIRECTIONS_URL),
         "payload_builder": google_payload,
-        "benchmark_func": benchmark_google_requests,
+        "benchmark_func": benchmark_http_requests,
         "client": None,
     },
-    # Add more services here...
+    {
+        "name": "valhalla_germany",
+        "endpoint": str(settings.VALHALLA_URL),
+        "payload_builder": valhalla_payload,
+        "benchmark_func": benchmark_http_requests,
+        "client": None,
+    },  # Add more services here...
 ]

@@ -42,16 +42,16 @@ class Settings(BaseSettings):
     DATA_INSERT_BATCH_SIZE = 800
 
     CELERY_BROKER_URL: Optional[str] = "pyamqp://guest@rabbitmq//"
-    REDIS_HOST: Optional[str] = "redis"
-    REDIS_PORT: Optional[str] = 6379
-    REDIS_DB: Optional[str] = 0
+    REDIS_HOST = "redis"
+    REDIS_PORT = 6379
+    REDIS_DB = 0
 
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     POSTGRES_PORT: Optional[str] = "5432"
-    POSTGRES_DATABASE_URI: str = None
+    POSTGRES_DATABASE_URI: Optional[str] = None
 
     @validator("POSTGRES_DATABASE_URI", pre=True)
     def postgres_database_uri_(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -59,8 +59,8 @@ class Settings(BaseSettings):
 
     MOTIS_HOST: Optional[str] = "motis"
     MOTIS_PORT: Optional[str] = "8080"
-    MOTIS_BASE_URL: str = None
-    MOTIS_PLAN_ENDPOINT: str = None
+    MOTIS_BASE_URL: Optional[str] = None
+    MOTIS_PLAN_ENDPOINT: Optional[str] = None
 
     @validator("MOTIS_BASE_URL", pre=True)
     def motis_base_url(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     )
 
     ASYNC_SQLALCHEMY_DATABASE_URI: Optional[AsyncPostgresDsn] = None
+
+    VALHALLA_URL: str
 
     @validator("ASYNC_SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_async_db_connection(
@@ -109,6 +111,7 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
+        env_file = ".env"
 
 
 settings = Settings()
