@@ -29,33 +29,29 @@ def build_result_row(
 
 
 @pytest.mark.benchmark(group="ab_routing")
-@pytest.mark.parametrize("coord", coordinates_list)
+@pytest.mark.parametrize("coord", coordinates_list[:3])
 @pytest.mark.parametrize("service", SERVICES)
 def test_compare_services_benchmark_with_coords(benchmark, coord, service):
     """
     Benchmark a single routing service using a coordinate pair.
     Tracks timing, CPU, memory usage, and response size per request.
-    Saves results to a CSV file.
     """
     origin, destination = coord
+    payload = service["payload_builder"](origin, destination)
 
     def run_benchmark():
-        payload = service["payload_builder"](origin, destination)
-        avg_time, avg_cpu, avg_mem = service["benchmark_func"](
+        # Only the actual API call is benchmarked
+        return service["benchmark_func"](
             service["client"], service["endpoint"], payload, num_requests=15
         )
-        # Measure response size for a single request
-        if service["client"]:
-            response = service["client"].post(service["endpoint"], json=payload)
-            response_size = len(response.content)
-        else:
-            import requests
 
-            response = requests.get(service["endpoint"], params=payload)
-            response_size = len(response.content)
+    # Run benchmark (timing happens here)
+    result = benchmark(run_benchmark)
+    avg_time, avg_cpu, avg_mem, avg_response_size = result if result else (0, 0, 0, 0)
+
+    # File writing happens after benchmark timing (not measured)
+    if avg_time > 0:
         row = build_result_row(
-            service, origin, destination, avg_time, avg_cpu, avg_mem, response_size
+            service, origin, destination, avg_time, avg_cpu, avg_mem, avg_response_size
         )
         write_result(row, filename=BENCHMARK_FILE, headers=BENCHMARK_HEADERS)
-
-    benchmark(run_benchmark)

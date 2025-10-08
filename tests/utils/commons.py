@@ -38,19 +38,23 @@ def motis_payload(
     destination: str,
     time: str = TIME_BENCH,
     detailed_transfers: str = "false",
+    **kwargs,
 ) -> Dict[str, str]:
     """
     Build a payload for the Motis routing API.
     """
+
     return {
         "fromPlace": origin,
         "toPlace": destination,
         "time": time,
         "detailedTransfers": detailed_transfers,
+        "maxItineraries": "6",  # Request up to 6 itineraries all is default
+        **kwargs,
     }
 
 
-FROM, TO = coordinates_list[0]
+FROM, TO = coordinates_list[5]
 MOTIS_PAYLOAD_BENCH = motis_payload(FROM, TO)
 
 
@@ -75,11 +79,10 @@ def google_payload(
 
 
 def valhalla_payload(
-    origin: str, destination: str, costing: str = "bus", **kwargs
+    origin: str, destination: str, costing: str = "multimodal", **kwargs
 ) -> Dict[str, Any]:
-    """Build payload for Valhalla routing API with bus costing.
-    Note: This instance doesn't support multimodal/GTFS, so we use bus costing
-    for transit-optimized routing on streets.
+    """Build payload for Valhalla routing API.
+    costing values: "multimodal", "auto", "bicycle", "pedestrian", "bus"
     """
     # Parse coordinates from "lat,lon" format
     origin_lat, origin_lon = map(float, origin.split(","))
@@ -147,7 +150,7 @@ SERVICES = [
         "client": None,
     },
     {
-        "name": "valhalla_germany",
+        "name": "valhalla",
         "endpoint": str(settings.VALHALLA_URL),
         "payload_builder": valhalla_payload,
         "benchmark_func": benchmark_http_requests,

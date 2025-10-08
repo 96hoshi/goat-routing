@@ -17,13 +17,15 @@ def benchmark_http_requests(
         payload: Request payload
         num_requests: Number of requests to make
         method: HTTP method ("POST" or "GET")
+        verbose: If True, print error messages
 
     Returns:
-        Tuple of (avg_time_ms, avg_cpu_seconds, avg_memory_mb)
+        Tuple of (avg_time_ms, avg_cpu_seconds, avg_memory_mb, avg_response_size_bytes)
     """
     timings = []
     cpu_usages = []
     mem_usages = []
+    response_sizes = []
     process = psutil.Process()
 
     for _ in range(num_requests):
@@ -31,6 +33,7 @@ def benchmark_http_requests(
         cpu_times_before = process.cpu_times()
 
         start = time.perf_counter()
+        response_size = 0
 
         try:
             if client_or_none is None:
@@ -41,6 +44,7 @@ def benchmark_http_requests(
                     else:
                         response = http_client.post(endpoint, json=payload)
                     response.raise_for_status()
+                    response_size = len(response.content)
 
                     # Special validation for Google
                     if "googleapis.com" in endpoint:
@@ -51,6 +55,7 @@ def benchmark_http_requests(
                 # Internal FastAPI call (Motis)
                 response = client_or_none.post(endpoint, json=payload)
                 assert response.status_code == 200
+                response_size = len(response.content)
 
         except Exception as e:
             print(f"Error in benchmark request to {endpoint}: {e}")
@@ -67,9 +72,14 @@ def benchmark_http_requests(
         )
         cpu_usages.append(cpu_time_delta)
         mem_usages.append(mem_after - mem_before)
+        response_sizes.append(response_size)
 
+    # Calculate averages only from successful requests
     avg_time = sum(timings) / len(timings) if timings else 0
     avg_cpu = sum(cpu_usages) / len(cpu_usages) if cpu_usages else 0
     avg_mem = sum(mem_usages) / len(mem_usages) if mem_usages else 0
+    avg_response_size = (
+        sum(response_sizes) / len(response_sizes) if response_sizes else 0
+    )
 
-    return avg_time, avg_cpu, avg_mem
+    return avg_time, avg_cpu, avg_mem, avg_response_size

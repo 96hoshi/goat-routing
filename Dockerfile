@@ -40,12 +40,15 @@ RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python
 RUN curl -sSL https://raw.githubusercontent.com/celery/celery/master/extra/generic-init.d/celeryd > /etc/init.d/celeryd && \
     chmod +x /etc/init.d/celeryd
 
-# Copy poetry.lock* in case it doesn't exist in the repo
+# Copy project metadata first
 COPY ./pyproject.toml ./poetry.lock* /app/
-# Allow installing dev dependencies to run tests
-ARG INSTALL_DEV=true
 
-RUN if [ "$INSTALL_DEV" = "true" ]; then poetry install --no-root ; else poetry install --no-root --only main ; fi
+# Rebuild the lock file if it's missing or outdated
+RUN poetry lock --no-update || true
+
+# Always install main + dev dependencies for development
+RUN poetry install --no-root --with dev
+
 COPY . /app
 
 # Run API server

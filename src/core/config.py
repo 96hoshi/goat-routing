@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
     @validator("MOTIS_PLAN_ENDPOINT")
     def motis_plan_endpoint(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
-        return f'{values.get("MOTIS_BASE_URL")}/api/v4/plan/'
+        return f'{values.get("MOTIS_BASE_URL")}/api/v5/plan/'
 
     GOOGLE_API_KEY: str
     GOOGLE_DIRECTIONS_URL: Optional[str] = (
@@ -77,7 +77,8 @@ class Settings(BaseSettings):
 
     ASYNC_SQLALCHEMY_DATABASE_URI: Optional[AsyncPostgresDsn] = None
 
-    VALHALLA_URL: str
+    VALHALLA_URL: str = "http://valhalla-gtfs:8002/route"
+    VALHALLA_NO_GTFS_URL: str = "http://valhalla:8005/route"
 
     @validator("ASYNC_SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_async_db_connection(
