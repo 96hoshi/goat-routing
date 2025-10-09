@@ -35,8 +35,8 @@
             }
         }
     },
+    "initializeCommand": "docker compose build api",
     "runServices": [
-        "api",
         "rabbitmq",
         "redis",
         "celery-worker",

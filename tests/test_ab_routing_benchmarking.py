@@ -1,57 +1,72 @@
 import pytest
 
-from tests.utils.commons import SERVICES, coordinates_list, write_result
+from tests.utils.commons import SERVICES, coordinates_list
+from tests.utils.models import ServiceMetrics
 
-BENCHMARK_FILE = "benchmark_results.csv"
-BENCHMARK_HEADERS = [
-    "service",
-    "origin",
-    "destination",
-    "avg_time_ms",
-    "avg_cpu_s",
-    "avg_mem_mb",
-    "response_size_bytes",
-]
+NUM_REQUESTS = 15
 
 
+# This function can now be in this file or a utils file.
 def build_result_row(
-    service, origin, destination, avg_time, avg_cpu, avg_mem, response_size
+    service, origin, dest, avg_time, avg_cpu, avg_mem, response_size, rounds
 ):
     return {
         "service": service["name"],
         "origin": origin,
-        "destination": destination,
-        "avg_time_ms": avg_time,
-        "avg_cpu_s": avg_cpu if avg_cpu is not None else "",
-        "avg_mem_mb": avg_mem if avg_mem is not None else "",
-        "response_size_bytes": response_size,
+        "destination": dest,
+        "avg_time_ms": f"{avg_time:.3f}",
+        "avg_cpu_s": f"{avg_cpu:.4f}",
+        "avg_mem_mb_delta": f"{avg_mem:.4f}",
+        "avg_response_size_bytes": f"{response_size:.0f}",
+        "rounds": rounds,
     }
 
 
 @pytest.mark.benchmark(group="ab_routing")
 @pytest.mark.parametrize("coord", coordinates_list[:3])
 @pytest.mark.parametrize("service", SERVICES)
-def test_compare_services_benchmark_with_coords(benchmark, coord, service):
+def test_compare_services_benchmark(
+    benchmark, coord, service, benchmark_reporter, response_writer
+):
     """
-    Benchmark a single routing service using a coordinate pair.
-    Tracks timing, CPU, memory usage, and response size per request.
+    Benchmarks a service, capturing timing, CPU, memory, response size and the response itself.
     """
     origin, destination = coord
     payload = service["payload_builder"](origin, destination)
 
-    def run_benchmark():
-        # Only the actual API call is benchmarked
-        return service["benchmark_func"](
-            service["client"], service["endpoint"], payload, num_requests=15
-        )
+    result: ServiceMetrics = benchmark.pedantic(
+        target=service["query_func"],
+        kwargs={
+            "client": service["client"],
+            "endpoint": service["endpoint"],
+            "payload": payload,
+            "method": service["method"],
+        },
+        rounds=5,  # Run 5 times for stable stats
+        iterations=1,
+    )
 
-    # Run benchmark (timing happens here)
-    result = benchmark(run_benchmark)
-    avg_time, avg_cpu, avg_mem, avg_response_size = result if result else (0, 0, 0, 0)
+    # Assert that the request was successful
+    assert result.status_code == 200, f"Request failed with status {result.status_code}"
 
-    # File writing happens after benchmark timing (not measured)
-    if avg_time > 0:
-        row = build_result_row(
-            service, origin, destination, avg_time, avg_cpu, avg_mem, avg_response_size
-        )
-        write_result(row, filename=BENCHMARK_FILE, headers=BENCHMARK_HEADERS)
+    # Get reliable timing from the benchmark framework
+    avg_time_ms = benchmark.stats["mean"] * 1000
+
+    # Use our custom fixture to write the full JSON response
+    response_filename = f"{service['name']}_{origin}_{destination}.json".replace(
+        ",", "_"
+    )
+    response_writer.save(result.response_data, response_filename)
+
+    # Append the aggregated result to our CSV reporter
+    row = build_result_row(
+        service,
+        origin,
+        destination,
+        avg_time=avg_time_ms,
+        avg_cpu=result.cpu_s,
+        avg_mem=result.mem_mb_delta,
+        response_size=result.response_size_bytes,
+        rounds=benchmark.stats["rounds"],
+    )
+    benchmark_reporter.append(row)

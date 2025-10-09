@@ -4,7 +4,8 @@ Clean routing comparison with proper separation of transport vs driving modes.
 - Driving: Google (driving), Valhalla-NoGTFS (auto)
 """
 
-from tests.utils.commons import coordinates_list, write_result
+from tests.conftest import write_result
+from tests.utils.commons import coordinates_list
 from tests.utils.query_helpers import (
     extract_google_route_summary,
     extract_motis_route_summary,
@@ -177,6 +178,7 @@ def test_transport_routing(verbose=False):
             row.update(service_data)
 
         write_result(row, filename=filename, headers=headers)
+        # response_writer.save(result, f"{service_name}_{origin}_{destination}.json")
 
     return filename
 

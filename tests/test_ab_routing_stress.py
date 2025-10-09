@@ -1,7 +1,8 @@
 import concurrent.futures
 import time
 
-from tests.utils.commons import MOTIS_PAYLOAD_BENCH, client, write_result
+from tests.conftest import write_result
+from tests.utils.commons import MOTIS_PAYLOAD_BENCH, client
 
 STRESS_TEST_FILE = "stress_test_results"
 STRESS_TEST_HEADERS = [

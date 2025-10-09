@@ -10,7 +10,6 @@ from tests.utils.commons import (
     TIME_BENCH,
     client,
     motis_payload,
-    write_response,
 )
 
 # Configuration constants
@@ -65,7 +64,7 @@ def query_motis(origin, destination, time=TIME_BENCH, **kwargs):
         response = client.post("/ab-routing", json=payload)
         response_size = len(response.content)
         data = response.json()
-        write_response(data, filename="motis_{}_{}.json".format(origin, destination))
+        # write_response(data, filename="motis_{}_{}.json".format(origin, destination))
         return data, response_size
     except Exception as e:
         print(f"Error calling AB-routing for {origin} -> {destination}: {e}")
@@ -158,9 +157,9 @@ def query_google(
             response.raise_for_status()
             response_size = len(response.content)
             data = response.json()
-            write_response(
-                data, filename="google_{}_{}.json".format(origin, destination)
-            )
+            # write_response(
+            #     data, filename="google_{}_{}.json".format(origin, destination)
+            # )
             return data, response_size
 
     try:
@@ -266,13 +265,13 @@ def query_valhalla(
             data = response.json()
 
             # Save response for debugging
-            service_type = (
-                "no_gtfs" if "no" in url.lower() or costing == "auto" else "gtfs"
-            )
-            write_response(
-                data,
-                filename=f"valhalla_{service_type}_{origin}_{destination}_{costing}.json",
-            )
+            # service_type = (
+            #     "no_gtfs" if "no" in url.lower() or costing == "auto" else "gtfs"
+            # )
+            # write_response(
+            #     data,
+            #     filename=f"valhalla_{service_type}_{origin}_{destination}_{costing}.json",
+            # )
             return data, response_size
 
     except httpx.TimeoutException as e:

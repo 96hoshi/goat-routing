@@ -3,83 +3,106 @@ import time
 import httpx
 import psutil
 
+from tests.utils.models import ServiceMetrics  # Import our new dataclass
 
-def benchmark_http_requests(
-    client_or_none, endpoint, payload, num_requests=15, method="POST"
-):
+
+# 2. GENERIC WRAPPER: For services with standard success criteria (HTTP 2xx).
+def generic_query_service(client, endpoint, payload, method) -> ServiceMetrics:
+    """A standard query that just relies on the core measurement function."""
+    return _measure_request(client, endpoint, payload, method)
+
+
+# 3. SPECIALIZED WRAPPER: For Google, which has unique success criteria.
+def google_query_service(client, endpoint, payload, method) -> ServiceMetrics:
+    """Wrapper for Google that checks the inner JSON status field."""
+    metrics = _measure_request(client, endpoint, payload, method)
+    # Add the special Google-specific logic here if needed, for example:
+    if metrics.status_code == 200 and isinstance(metrics.response_data, dict):
+        if metrics.response_data.get("status") not in ["OK", "ZERO_RESULTS"]:
+            print(
+                f"Warning: Google API returned outer 200 OK but inner status of '{metrics.response_data.get('status')}'"
+            )
+    return metrics
+
+
+def _measure_request(
+    client: httpx.Client, endpoint: str, payload: dict, method: str = "POST"
+) -> ServiceMetrics:
     """
-    Universal benchmark function that works for both internal (TestClient)
-    and external (HTTP) endpoints.
-
-    Args:
-        client_or_none: TestClient for internal calls, None for external HTTP calls
-        endpoint: URL endpoint to call
-        payload: Request payload
-        num_requests: Number of requests to make
-        method: HTTP method ("POST" or "GET")
-        verbose: If True, print error messages
-
-    Returns:
-        Tuple of (avg_time_ms, avg_cpu_seconds, avg_memory_mb, avg_response_size_bytes)
+    Performs a single request and measures associated performance metrics.
+    This is the core, low-level measurement function. It does not make
+    any assumptions about what a "successful" request is beyond the
+    HTTP level; its job is simply to measure and report.
     """
-    timings = []
-    cpu_usages = []
-    mem_usages = []
-    response_sizes = []
     process = psutil.Process()
+    response_size = 0
+    status_code = -1
+    response_data = {}
 
-    for _ in range(num_requests):
-        mem_before = process.memory_info().rss / (1024 * 1024)
-        cpu_times_before = process.cpu_times()
+    # --- Measurement starts here ---
+    mem_before_mb = process.memory_info().rss / (1024 * 1024)
+    cpu_times_before = process.cpu_times()
+    start_time = time.perf_counter()
 
-        start = time.perf_counter()
-        response_size = 0
+    try:
+        # Determine the HTTP method and make the request
+        if method.upper() == "POST":
+            response = client.post(endpoint, json=payload, timeout=30.0)
+        else:  # Assumes GET for everything else
+            response = client.get(endpoint, params=payload, timeout=30.0)
 
+        # Record basic response info
+        status_code = response.status_code
+
+        # This will raise an httpx.HTTPStatusError for 4xx or 5xx responses,
+        # which is caught by the except block below.
+        response.raise_for_status()
+
+        # If we get here, the request was successful (2xx)
+        response_size = len(response.content)
+        response_data = response.json()
+
+    except httpx.RequestError as e:
+        # Covers connection errors, timeouts, etc.
+        print(f"An HTTP request error occurred: {e.__class__.__name__} - {e}")
+        response_data = {"error": str(e)}
+        # status_code will remain -1 or whatever the client might have set
+
+    except httpx.HTTPStatusError as e:
+        # This specifically catches 4xx and 5xx responses from raise_for_status()
+        print(f"An HTTP status error occurred: {e.response.status_code} - {e}")
+        status_code = e.response.status_code
         try:
-            if client_or_none is None:
-                # External HTTP call (Google, Valhalla)
-                with httpx.Client(timeout=30.0) as http_client:
-                    if method.upper() == "GET":
-                        response = http_client.get(endpoint, params=payload)
-                    else:
-                        response = http_client.post(endpoint, json=payload)
-                    response.raise_for_status()
-                    response_size = len(response.content)
+            # Try to get error details from the response body if possible
+            response_data = e.response.json()
+        except Exception:
+            response_data = {"error": e.response.text or "No response body."}
 
-                    # Special validation for Google
-                    if "googleapis.com" in endpoint:
-                        data = response.json()
-                        assert data.get("status") == "OK"
+    except Exception as e:
+        # Catch-all for other errors, like JSON decoding failures
+        print(f"An unexpected error occurred: {e.__class__.__name__} - {e}")
+        response_data = {"error": str(e)}
 
-            else:
-                # Internal FastAPI call (Motis)
-                response = client_or_none.post(endpoint, json=payload)
-                assert response.status_code == 200
-                response_size = len(response.content)
-
-        except Exception as e:
-            print(f"Error in benchmark request to {endpoint}: {e}")
-            continue
-
-        end = time.perf_counter()
-
-        mem_after = process.memory_info().rss / (1024 * 1024)
+    finally:
+        # This block ALWAYS runs, ensuring we get our "after" measurements
+        end_time = time.perf_counter()
         cpu_times_after = process.cpu_times()
+        mem_after_mb = process.memory_info().rss / (1024 * 1024)
+    # --- Measurement ends here ---
 
-        timings.append((end - start) * 1000)  # ms
-        cpu_time_delta = (cpu_times_after.user + cpu_times_after.system) - (
-            cpu_times_before.user + cpu_times_before.system
-        )
-        cpu_usages.append(cpu_time_delta)
-        mem_usages.append(mem_after - mem_before)
-        response_sizes.append(response_size)
-
-    # Calculate averages only from successful requests
-    avg_time = sum(timings) / len(timings) if timings else 0
-    avg_cpu = sum(cpu_usages) / len(cpu_usages) if cpu_usages else 0
-    avg_mem = sum(mem_usages) / len(mem_usages) if mem_usages else 0
-    avg_response_size = (
-        sum(response_sizes) / len(response_sizes) if response_sizes else 0
+    # Calculate the deltas (changes)
+    duration_ms = (end_time - start_time) * 1000
+    cpu_delta_s = (cpu_times_after.user + cpu_times_after.system) - (
+        cpu_times_before.user + cpu_times_before.system
     )
+    mem_delta_mb = mem_after_mb - mem_before_mb
 
-    return avg_time, avg_cpu, avg_mem, avg_response_size
+    # Return the structured data, no matter what happened
+    return ServiceMetrics(
+        time_ms=duration_ms,
+        cpu_s=cpu_delta_s,
+        mem_mb_delta=mem_delta_mb,
+        response_size_bytes=response_size,
+        status_code=status_code,
+        response_data=response_data,
+    )
