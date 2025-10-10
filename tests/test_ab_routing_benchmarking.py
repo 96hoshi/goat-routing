@@ -19,7 +19,7 @@ def build_result_row(
     }
 
 
-@pytest.mark.parametrize("coord", coordinates_list[:3])
+@pytest.mark.parametrize("coord", coordinates_list)
 @pytest.mark.parametrize("service", SERVICES)
 def test_compare_services_benchmark(
     benchmark, coord, service, benchmark_reporter, response_writer

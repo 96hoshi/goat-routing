@@ -18,7 +18,7 @@ AVAILABLE_SERVICES = {
 def load_and_merge_data(mode=None):
     """
     Load and merge data from comparison files and OTP performance data.
-    Returns merged DataFrame with all service data.
+    Returns merged DataFrame with all service data including modes and vehicle_lines.
     """
     # Determine comparison file
     if mode == "transport":
@@ -55,6 +55,7 @@ def load_and_merge_data(mode=None):
             # Add OTP columns from performance data
             mode_suffix = mode if mode else ""
             if mode_suffix:
+                # Add numeric columns
                 merged_df[f"otp_duration_{mode_suffix}"] = pd.to_numeric(
                     perf_df["route_duration"].iloc[:min_rows], errors="coerce"
                 )
@@ -70,19 +71,43 @@ def load_and_merge_data(mode=None):
                 merged_df[f"otp_num_routes_{mode_suffix}"] = (
                     1  # OTP returns 1 route per query
                 )
+
+                # Add modes and vehicle_lines columns
+                if "modes" in perf_df.columns:
+                    merged_df[f"otp_modes_{mode_suffix}"] = (
+                        perf_df["modes"].iloc[:min_rows].values
+                    )
+                if "vehicle_lines" in perf_df.columns:
+                    merged_df[f"otp_vehicle_lines_{mode_suffix}"] = (
+                        perf_df["vehicle_lines"].iloc[:min_rows].values
+                    )
             else:
+                # Add without mode suffix
                 merged_df["otp_duration"] = pd.to_numeric(
                     perf_df["route_duration"].iloc[:min_rows], errors="coerce"
                 )
-                merged_df["otp_distance"] = pd.to_numeric(
-                    perf_df["route_distance"].iloc[:min_rows], errors="coerce"
+                merged_df["otp_distance"] = (
+                    pd.to_numeric(
+                        perf_df["route_distance"].iloc[:min_rows], errors="coerce"
+                    )
+                    * 1000
                 )
                 merged_df["otp_response_size"] = pd.to_numeric(
                     perf_df["response_size_bytes"].iloc[:min_rows], errors="coerce"
                 )
                 merged_df["otp_num_routes"] = 1
 
-            print(f"   Merged OTP performance data ({min_rows} rows)")
+                # Add modes and vehicle_lines
+                if "modes" in perf_df.columns:
+                    merged_df["otp_modes"] = perf_df["modes"].iloc[:min_rows].values
+                if "vehicle_lines" in perf_df.columns:
+                    merged_df["otp_vehicle_lines"] = (
+                        perf_df["vehicle_lines"].iloc[:min_rows].values
+                    )
+
+            print(
+                f"   Merged OTP performance data ({min_rows} rows) including modes and vehicle_lines"
+            )
         else:
             # Only OTP performance data available, create comparison format
             merged_df = pd.DataFrame()
@@ -99,6 +124,14 @@ def load_and_merge_data(mode=None):
                     perf_df["response_size_bytes"], errors="coerce"
                 )
                 merged_df[f"otp_num_routes_{mode_suffix}"] = 1
+
+                # Add modes and vehicle_lines
+                if "modes" in perf_df.columns:
+                    merged_df[f"otp_modes_{mode_suffix}"] = perf_df["modes"]
+                if "vehicle_lines" in perf_df.columns:
+                    merged_df[f"otp_vehicle_lines_{mode_suffix}"] = perf_df[
+                        "vehicle_lines"
+                    ]
             else:
                 merged_df["otp_duration"] = pd.to_numeric(
                     perf_df["route_duration"], errors="coerce"
@@ -111,6 +144,12 @@ def load_and_merge_data(mode=None):
                 )
                 merged_df["otp_num_routes"] = 1
 
+                # Add modes and vehicle_lines
+                if "modes" in perf_df.columns:
+                    merged_df["otp_modes"] = perf_df["modes"]
+                if "vehicle_lines" in perf_df.columns:
+                    merged_df["otp_vehicle_lines"] = perf_df["vehicle_lines"]
+
             # Add origin/destination from performance data if available
             if "origin" in perf_df.columns:
                 merged_df["origin"] = perf_df["origin"]
@@ -118,7 +157,7 @@ def load_and_merge_data(mode=None):
                 merged_df["destination"] = perf_df["destination"]
 
             print(
-                f"   Created comparison data from OTP performance ({len(merged_df)} rows)"
+                f"   Created comparison data from OTP performance ({len(merged_df)} rows) including modes and vehicle_lines"
             )
 
     return merged_df
@@ -252,7 +291,7 @@ def generate_metric_plots(route_labels, df, services, mode_suffix, file_suffix):
 
 
 def save_modes_and_vehicle_lines_table(route_labels, df, services, mode_suffix=""):
-    """Save comparison table for selected services."""
+    """Save comparison table for selected services including modes and vehicle_lines."""
     table_rows = []
 
     for service in services:
@@ -267,9 +306,10 @@ def save_modes_and_vehicle_lines_table(route_labels, df, services, mode_suffix="
             ]
             for metric in base_metrics:
                 if mode_suffix:
-                    table_rows.append(f"{service}_{metric}_{mode_suffix}")
+                    col_name = f"{service}_{metric}_{mode_suffix}"
                 else:
-                    table_rows.append(f"{service}_{metric}")
+                    col_name = f"{service}_{metric}"
+                table_rows.append(col_name)
 
     # Filter existing columns only
     existing_rows = [row for row in table_rows if row in df.columns]
@@ -287,6 +327,15 @@ def save_modes_and_vehicle_lines_table(route_labels, df, services, mode_suffix="
         table_path = os.path.join(RESULT_DIR, filename)
         table_df.to_csv(table_path)
         print(f"✅ Saved comparison table: {filename}")
+
+        # Show sample of modes and vehicle_lines data
+        modes_rows = [row for row in existing_rows if "modes" in row]
+        vehicle_rows = [row for row in existing_rows if "vehicle" in row]
+
+        if modes_rows:
+            print(f"   Modes data available for: {modes_rows}")
+        if vehicle_rows:
+            print(f"   Vehicle lines data available for: {vehicle_rows}")
 
 
 def visualize_comparison(services=None, mode=None, custom_file=None):
