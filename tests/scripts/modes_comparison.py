@@ -9,10 +9,8 @@ from tests.utils.commons import coordinates_list
 from tests.utils.query_helpers import (
     extract_google_route_summary,
     extract_motis_route_summary,
-    extract_valhalla_route_summary,
     query_google,
     query_motis,
-    query_valhalla,
 )
 
 # Transport services (public transit)
@@ -29,13 +27,26 @@ TRANSPORT_SERVICES = {
         "query_params": {"mode": "transit"},
         "routes_path": ["routes"],
     },
-    "valhalla_gtfs": {
-        "query_func": query_valhalla,
-        "extract_func": extract_valhalla_route_summary,
-        "query_params": {"costing": "multimodal"},
-        "routes_path": ["trip", "legs"],
-        "extra_fields": ["transit_stops", "agencies", "has_gtfs_data"],
-    },
+    # "valhalla_gtfs": {
+    #     "query_func": query_valhalla,
+    #     "extract_func": extract_valhalla_route_summary,
+    #     "query_params": {"costing": "multimodal"},
+    #     "routes_path": ["trip", "legs"],
+    #     "extra_fields": ["transit_stops", "agencies", "has_gtfs_data"],
+    # },
+    # "otp": {
+    #     "query_func": query_otp,
+    #     "extract_func": extract_otp_route_summary,
+    #     "query_params": {
+    #         "transport_modes": ["TRANSIT", "WALK"]
+    #     },  # Fixed parameter name
+    #     "routes_path": [
+    #         "data",
+    #         "plan",
+    #         "itineraries",
+    #     ],  # Fixed path for GraphQL response
+    #     "extra_fields": ["transit_stops", "agencies"],
+    # },
 }
 
 # Driving services (car routing)
@@ -46,13 +57,13 @@ DRIVING_SERVICES = {
         "query_params": {"mode": "driving"},
         "routes_path": ["routes"],
     },
-    "valhalla": {
-        "query_func": query_valhalla,
-        "extract_func": extract_valhalla_route_summary,
-        "query_params": {"costing": "auto"},
-        "routes_path": ["trip", "legs"],
-        "use_no_gtfs_endpoint": True,
-    },
+    # "valhalla": {
+    #     "query_func": query_valhalla,
+    #     "extract_func": extract_valhalla_route_summary,
+    #     "query_params": {"costing": "auto"},
+    #     "routes_path": ["trip", "legs"],
+    #     "use_no_gtfs_endpoint": True,
+    # },
 }
 
 # Common fields for all services
@@ -151,7 +162,7 @@ def get_headers_for_services(services, mode):
     return headers
 
 
-def test_transport_routing(verbose=False):
+def test_transport_routing():
     """Test transport/transit routing services."""
     filename = "transport_comparison.csv"
     mode = "transport"
@@ -178,12 +189,11 @@ def test_transport_routing(verbose=False):
             row.update(service_data)
 
         write_result(row, filename=filename, headers=headers)
-        # response_writer.save(result, f"{service_name}_{origin}_{destination}.json")
 
     return filename
 
 
-def test_driving_routing(verbose=False):
+def test_driving_routing():
     """Test driving/car routing services."""
     filename = "driving_comparison.csv"
     mode = "driving"
@@ -218,23 +228,14 @@ def compare_all_routing_modes(verbose=False):
     """Compare both transport and driving routing modes."""
 
     # Test transport routing
-    transport_file = test_transport_routing(verbose=verbose)
+    transport_file = test_transport_routing()
 
     # Test driving routing
-    driving_file = test_driving_routing(verbose=verbose)
+    driving_file = test_driving_routing()
 
-    return {"transport": transport_file, "driving": driving_file}
-
-
-# Convenience functions
-def test_transport_only():
-    """Test only transport routing."""
-    return test_transport_routing(verbose=True)
-
-
-def test_driving_only():
-    """Test only driving routing."""
-    return test_driving_routing(verbose=True)
+    if verbose:
+        print(f"Transport comparison saved to {transport_file}")
+        print(f"Driving comparison saved to {driving_file}")
 
 
 if __name__ == "__main__":

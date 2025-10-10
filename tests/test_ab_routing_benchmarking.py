@@ -3,10 +3,7 @@ import pytest
 from tests.utils.commons import SERVICES, coordinates_list
 from tests.utils.models import ServiceMetrics
 
-NUM_REQUESTS = 15
 
-
-# This function can now be in this file or a utils file.
 def build_result_row(
     service, origin, dest, avg_time, avg_cpu, avg_mem, response_size, rounds
 ):
@@ -22,7 +19,6 @@ def build_result_row(
     }
 
 
-@pytest.mark.benchmark(group="ab_routing")
 @pytest.mark.parametrize("coord", coordinates_list[:3])
 @pytest.mark.parametrize("service", SERVICES)
 def test_compare_services_benchmark(

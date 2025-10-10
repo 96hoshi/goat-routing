@@ -1,12 +1,8 @@
-"""
-Unit tests for Valhalla routing service integration.
-"""
-
 import pytest
 
 from src.core.config import settings
-from tests.utils.benchmark_helpers import benchmark_http_requests
-from tests.utils.commons import coordinates_list, write_response
+from tests.utils.commons import coordinates_list, external_client
+from tests.utils.models import ServiceMetrics
 from tests.utils.query_helpers import (
     extract_valhalla_route_summary,
     query_valhalla,
@@ -54,7 +50,7 @@ def test_valhalla_route_summary_extraction():
     result, _ = query_valhalla(origin, destination, costing="auto")
     assert result is not None, "Valhalla should return a result"
     # write result to file for inspection if needed
-    write_response(result, f"valhalla_response_{origin}_{destination}.json")
+    # write_response(result, f"valhalla_response_{origin}_{destination}.json")
 
     summary = extract_valhalla_route_summary(result)
     assert summary is not None, "Should extract a valid summary"
@@ -70,22 +66,61 @@ def test_valhalla_route_summary_extraction():
     assert isinstance(summary["vehicle_lines"], list), "Vehicle lines should be a list"
 
 
-def test_valhalla_benchmark():
-    """Test Valhalla benchmarking functionality."""
+# def test_valhalla_benchmark():
+#     """Test Valhalla benchmarking functionality."""
+#     from tests.utils.commons import valhalla_payload
+
+#     origin, destination = coordinates_list[0]
+#     payload = valhalla_payload(origin, destination, costing="auto")
+
+#     # Run a small benchmark
+#     avg_time, avg_cpu, avg_memory = benchmark_http_requests(
+#         None, settings.VALHALLA_URL, payload, num_requests=3
+#     )
+
+#     assert avg_time > 0, "Average time should be positive"
+#     # CPU and memory might be 0 or None depending on system
+#     assert avg_cpu is not None, "CPU measurement should return a value"
+#     assert avg_memory is not None, "Memory measurement should return a value"
+
+
+def test_valhalla_query_service_smoke_test():
+    """
+    A smoke test to ensure generic_query_service works for Valhalla.
+    It performs one request and checks for a valid result.
+    """
+    # --- 1. Setup ---
+    from src.core.config import settings
+
+    # Import the NEW function we want to test
+    from tests.utils.benchmark_helpers import generic_query_service
     from tests.utils.commons import valhalla_payload
 
     origin, destination = coordinates_list[0]
     payload = valhalla_payload(origin, destination, costing="auto")
 
-    # Run a small benchmark
-    avg_time, avg_cpu, avg_memory = benchmark_http_requests(
-        None, settings.VALHALLA_URL, payload, num_requests=3
+    # --- 2. Execution (The New Way) ---
+    # Use a real httpx client for external calls
+    # Call the function just ONCE to get a single, raw result
+    result: ServiceMetrics = generic_query_service(
+        client=external_client,
+        endpoint=str(settings.VALHALLA_URL),
+        payload=payload,
+        method="POST",
     )
 
-    assert avg_time > 0, "Average time should be positive"
-    # CPU and memory might be 0 or None depending on system
-    assert avg_cpu is not None, "CPU measurement should return a value"
-    assert avg_memory is not None, "Memory measurement should return a value"
+    # --- 3. Assertions (on the new ServiceMetrics object) ---
+    # Most important: Did the request actually succeed?
+    assert result.status_code == 200, f"Request failed with status {result.status_code}"
+
+    # Check that the metrics have plausible values
+    assert result.time_ms > 0, "Time measurement should be positive"
+    assert result.cpu_s is not None, "CPU measurement should return a value"
+    assert result.mem_mb_delta is not None, "Memory measurement should return a value"
+    assert result.response_size_bytes > 0, "Response should have content"
+
+    # You can even check the response data itself
+    assert "trip" in result.response_data, "Valhalla response should contain a 'trip'"
 
 
 def test_valhalla_error_handling():

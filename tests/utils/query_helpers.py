@@ -6,15 +6,8 @@ import httpx
 import polyline
 
 from src.core.config import settings
-from tests.utils.commons import (
-    TIME_BENCH,
-    client,
-    motis_payload,
-)
+from tests.utils.commons import TIME_BENCH, client, motis_payload, otp_payload
 
-# Configuration constants
-DEFAULT_TIMEOUT = 30.0  # seconds
-GOOGLE_API_TIMEOUT = 45.0  # Google can be slower due to complex transit routing
 MAX_RETRIES = 2  # Number of retries for API calls
 
 
@@ -64,7 +57,6 @@ def query_motis(origin, destination, time=TIME_BENCH, **kwargs):
         response = client.post("/ab-routing", json=payload)
         response_size = len(response.content)
         data = response.json()
-        # write_response(data, filename="motis_{}_{}.json".format(origin, destination))
         return data, response_size
     except Exception as e:
         print(f"Error calling AB-routing for {origin} -> {destination}: {e}")
@@ -152,23 +144,15 @@ def query_google(
     url = str(settings.GOOGLE_DIRECTIONS_URL)
 
     def make_request():
-        with httpx.Client(timeout=GOOGLE_API_TIMEOUT) as client_http:
+        with httpx.Client() as client_http:
             response = client_http.get(url, params=params)
             response.raise_for_status()
             response_size = len(response.content)
             data = response.json()
-            # write_response(
-            #     data, filename="google_{}_{}.json".format(origin, destination)
-            # )
             return data, response_size
 
     try:
         return retry_api_call(make_request)
-    except httpx.TimeoutException as e:
-        print(
-            f"Timeout occurred while calling Google Directions API after {GOOGLE_API_TIMEOUT}s: {e}"
-        )
-        return None, None
     except httpx.HTTPError as e:
         print(f"HTTP Error occurred while calling Google Directions API: {e}")
         return None, None
@@ -258,27 +242,13 @@ def query_valhalla(
         url = settings.VALHALLA_URL
 
     try:
-        with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
+        with httpx.Client() as client:
             response = client.post(url, json=payload)
             response.raise_for_status()
             response_size = len(response.content)
             data = response.json()
-
-            # Save response for debugging
-            # service_type = (
-            #     "no_gtfs" if "no" in url.lower() or costing == "auto" else "gtfs"
-            # )
-            # write_response(
-            #     data,
-            #     filename=f"valhalla_{service_type}_{origin}_{destination}_{costing}.json",
-            # )
             return data, response_size
 
-    except httpx.TimeoutException as e:
-        print(
-            f"Timeout occurred while calling Valhalla API after {DEFAULT_TIMEOUT}s: {e}"
-        )
-        return None, None
     except httpx.HTTPError as e:
         print(f"HTTP Error occurred while calling Valhalla API: {e}")
         return None, None
@@ -359,4 +329,105 @@ def extract_valhalla_route_summary(result: Dict[str, Any]) -> Optional[Dict[str,
             if has_transit_data
             else "Multimodal routing without transit data"
         ),
+    }
+
+
+# -------------------------- OTP ---------------------- #
+def query_otp(
+    origin,
+    destination,
+    endpoint: str = str(settings.OPEN_TRIP_PLANNER_URL),
+) -> Tuple[Dict[str, Any], int]:
+    """Query OpenTripPlanner GraphQL API."""
+    origin_str = f"{origin[0]},{origin[1]}"
+    destination_str = f"{destination[0]},{destination[1]}"
+
+    payload = otp_payload(origin_str, destination_str)
+
+    try:
+        with httpx.Client() as client_http:
+            response = client_http.post(
+                endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if "errors" in data:
+                print(f"OTP GraphQL errors: {data['errors']}")
+                return {}, 0
+
+            return data, len(response.content)
+
+    except httpx.HTTPError as e:
+        print(f"HTTP Error: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+    return {}, 0
+
+
+def extract_otp_route_summary(response: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract route summary from OTP GraphQL response."""
+    if not response or "data" not in response:
+        return {
+            "duration": 0,
+            "distance": 0,
+            "num_routes": 0,
+            "modes": [],
+            "vehicle_lines": [],
+        }
+
+    plan = response["data"].get("plan", {})
+    itineraries = plan.get("itineraries", [])
+
+    if not itineraries:
+        return {
+            "duration": 0,
+            "distance": 0,
+            "num_routes": 0,
+            "modes": [],
+            "vehicle_lines": [],
+        }
+
+    # Use the first itinerary for summary
+    first_itinerary = itineraries[0]
+
+    # Extract basic metrics
+    duration = first_itinerary.get("duration", 0)  # seconds
+
+    # Calculate total distance by summing all leg distances
+    total_distance = 0.0
+    for leg in first_itinerary.get("legs", []):
+        leg_distance = leg.get("distance", 0)  # meters
+        total_distance += leg_distance
+
+    # Extract modes and vehicle lines from legs
+    modes = set()
+    vehicle_lines = set()
+
+    for leg in first_itinerary.get("legs", []):
+        mode = leg.get("mode", "")
+        if mode:
+            modes.add(mode)
+
+        # Extract route info for transit legs
+        if leg.get("transitLeg"):
+            route = leg.get("route", {})
+            if isinstance(route, dict):
+                short_name = route.get("shortName", "")
+                if short_name:
+                    vehicle_lines.add(short_name)
+            elif isinstance(route, str) and route:
+                vehicle_lines.add(route)
+
+    return {
+        "duration": duration,
+        "distance": round(
+            total_distance / 1000.0, 3
+        ),  # Convert meters to kilometers and round
+        "num_routes": len(itineraries),
+        "modes": sorted(modes),
+        "vehicle_lines": sorted(vehicle_lines),
     }

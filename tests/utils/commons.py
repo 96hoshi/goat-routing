@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from textwrap import dedent
 from typing import Any, Dict
 
 import httpx
@@ -9,7 +10,11 @@ from src.core.config import settings
 from src.endpoints.v2.routing import router
 from tests.coords.coords import mannheim_coordinates
 
-from .benchmark_helpers import generic_query_service, google_query_service
+from .benchmark_helpers import (
+    generic_query_service,
+    google_query_service,
+    otp_query_service,
+)
 
 # FastAPI test client setup
 app = FastAPI()
@@ -31,6 +36,12 @@ IMAGES_DIR = "tests/results/images/"
 TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
     hour=8, minute=0, second=0, microsecond=0
 ).isoformat() + "Z"
+
+
+def parse_coords(coord_str):
+    """Parse coordinate string 'lat,lon' into tuple of floats."""
+    lat, lon = map(float, coord_str.split(","))
+    return lat, lon
 
 
 # Motis payload builder
@@ -101,13 +112,77 @@ def valhalla_payload(
     }
 
 
+def otp_payload(
+    origin: str,
+    destination: str,
+    # transport_modes: list[str] = ["CAR"],
+    time: str = TIME_BENCH.split("T")[1].replace("Z", ""),
+    date: str = TIME_BENCH.split("T")[0],
+    num_itineraries: int = 1,
+) -> dict[str, Any]:
+    """Build minimal GraphQL payload for OTP CAR test."""
+
+    def parse_coords(coord_str: str) -> dict[str, float]:
+        lat, lon = map(float, coord_str.split(","))
+        return {"lat": lat, "lon": lon}
+
+    query = dedent(
+        """
+        query PlanTrip(
+          $from: InputCoordinates!,
+          $to: InputCoordinates!,
+          $date: String!,
+          $time: String!,
+          $numItineraries: Int
+        ) {
+          plan(
+            from: $from,
+            to: $to,
+            date: $date,
+            time: $time,
+            numItineraries: $numItineraries
+          ) {
+            date
+            from { name lat lon }
+            to { name lat lon }
+            itineraries {
+              startTime
+              endTime
+              duration
+              legs {
+                startTime
+                endTime
+                mode
+                duration
+                distance
+                from { name lat lon }
+                to { name lat lon }
+              }
+            }
+          }
+        }
+    """
+    )
+
+    variables = {
+        "from": parse_coords(origin),
+        "to": parse_coords(destination),
+        # "transportModes": [{"mode": mode} for mode in transport_modes],
+        "date": date,
+        "time": time,
+        "numItineraries": num_itineraries,
+    }
+
+    return {"query": query.strip(), "variables": variables}
+
+
 SERVICES = [
     {
         "name": "motis",
         "client": client,
         "endpoint": "/ab-routing",
         "payload_builder": motis_payload,
-        "query_func": generic_query_service,  # This one is standard
+        "query_func": generic_query_service,
         "method": "POST",
     },
     {
@@ -115,15 +190,23 @@ SERVICES = [
         "client": external_client,
         "endpoint": str(settings.GOOGLE_DIRECTIONS_URL),
         "payload_builder": google_payload,
-        "query_func": google_query_service,  # Use the specialized wrapper
+        "query_func": google_query_service,
         "method": "GET",
     },
+    # {
+    #     "name": "valhalla",
+    #     "client": external_client,
+    #     "endpoint": str(settings.VALHALLA_URL),
+    #     "payload_builder": valhalla_payload,
+    #     "query_func": generic_query_service,
+    #     "method": "POST",
+    # },
     {
-        "name": "valhalla",
+        "name": "otp",
         "client": external_client,
-        "endpoint": str(settings.VALHALLA_URL),
-        "payload_builder": valhalla_payload,
-        "query_func": generic_query_service,  # This one is also standard
+        "endpoint": str(settings.OPEN_TRIP_PLANNER_URL),
+        "payload_builder": otp_payload,
+        "query_func": otp_query_service,
         "method": "POST",
     },
 ]

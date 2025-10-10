@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     def postgres_database_uri_(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
         return f'postgresql://{values.get("POSTGRES_USER")}:{values.get("POSTGRES_PASSWORD")}@{values.get("POSTGRES_SERVER")}:{values.get("POSTGRES_PORT")}/{values.get("POSTGRES_DB")}'
 
+    # MOTIS
     MOTIS_HOST: Optional[str] = "motis"
     MOTIS_PORT: Optional[str] = "8080"
     MOTIS_BASE_URL: Optional[str] = None
@@ -70,15 +71,21 @@ class Settings(BaseSettings):
     def motis_plan_endpoint(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
         return f'{values.get("MOTIS_BASE_URL")}/api/v5/plan/'
 
+    # Google Maps
     GOOGLE_API_KEY: str
     GOOGLE_DIRECTIONS_URL: Optional[str] = (
         "https://maps.googleapis.com/maps/api/directions/json"
     )
 
-    ASYNC_SQLALCHEMY_DATABASE_URI: Optional[AsyncPostgresDsn] = None
-
+    # Valhalla
     VALHALLA_URL: str = "http://valhalla-gtfs:8002/route"
-    VALHALLA_NO_GTFS_URL: str = "http://valhalla:8005/route"
+    VALHALLA_NO_GTFS_URL: str = "http://valhalla:8006/route"
+
+    # OpenTripPlanner
+    OPEN_TRIP_PLANNER_URL: str
+    OPEN_TRIP_PLANNER_PLAN_TEMPLATE: str = "plan.graphql"
+
+    ASYNC_SQLALCHEMY_DATABASE_URI: Optional[AsyncPostgresDsn] = None
 
     @validator("ASYNC_SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_async_db_connection(

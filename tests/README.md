@@ -31,7 +31,6 @@ pytest --benchmark-save tests/test_ab_routing_benchmarking.py
 
 - **Benchmark results:** `results/benchmark_results.csv` and `pytest-benchmark compare .benchmarks/<run>.json`
 - **Service comparison:** `results/service_comparison_results.csv`
-- **Modes and vehicle lines:** `results/modes_and_vehicle_lines.csv`
 - **Response files:** `results/responses/`
 
 ### 5. Execute and Compare Routing Services
@@ -39,16 +38,5 @@ pytest --benchmark-save tests/test_ab_routing_benchmarking.py
 To run the comparison script and generate service comparison results and visualizations:
 
 ```sh
-python tests/scripts/comparison.py
+python tests/scripts/modes_comparison.py
 ```
-
-This will:
-- Query both Motis and Google Directions for all coordinate pairs in coords.py.
-- Save the comparison results to `results/service_comparison_results.csv`.
-- Automatically generate visualizations in `results/images/`.
-
----
-
-**Note:**  
-- Ensure all dependencies are installed (see project requirements).
-- Tests are designed for use with `pytest` and `pytest-benchmark`.

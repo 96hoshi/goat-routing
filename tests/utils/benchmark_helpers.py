@@ -25,6 +25,31 @@ def google_query_service(client, endpoint, payload, method) -> ServiceMetrics:
     return metrics
 
 
+# 4. SPECIALIZED WRAPPER: For OTP GraphQL, which has unique GraphQL error handling.
+def otp_query_service(client, endpoint, payload, method) -> ServiceMetrics:
+    """Wrapper for OpenTripPlanner that checks GraphQL errors in addition to HTTP status."""
+    metrics = _measure_request(client, endpoint, payload, method)
+
+    # Add OTP-specific GraphQL error checking
+    if metrics.status_code == 200 and isinstance(metrics.response_data, dict):
+        if "errors" in metrics.response_data:
+            print(
+                f"Warning: OTP returned HTTP 200 but GraphQL errors: {metrics.response_data['errors']}"
+            )
+            # Log the error details but don't fail the benchmark
+        elif "data" in metrics.response_data:
+            plan = metrics.response_data.get("data", {}).get("plan", {})
+            itineraries = plan.get("itineraries", [])
+            if not itineraries:
+                print("Info: OTP returned successful response but found no routes")
+            else:
+                print(f"Success: OTP found {len(itineraries)} route(s)")
+        else:
+            print("Warning: OTP returned unexpected GraphQL response structure")
+
+    return metrics
+
+
 def _measure_request(
     client: httpx.Client, endpoint: str, payload: dict, method: str = "POST"
 ) -> ServiceMetrics:
