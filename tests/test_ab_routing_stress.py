@@ -2,7 +2,7 @@ import concurrent.futures
 import time
 
 from tests.conftest import write_result
-from tests.utils.commons import MOTIS_PAYLOAD_BENCH, client
+from tests.utils.commons import client, coordinates_list, motis_payload
 
 STRESS_TEST_FILE = "stress_test_results"
 STRESS_TEST_HEADERS = [
@@ -20,7 +20,10 @@ def test_heavy_load_concurrent(num_clients=50):
 
     def call_motis(idx: int):
         start = time.perf_counter()
-        response = client.post("/ab-routing", json=MOTIS_PAYLOAD_BENCH)
+        response = client.post(
+            "/ab-routing",
+            json=motis_payload(coordinates_list[5][0], coordinates_list[5][1]),
+        )
         end = time.perf_counter()
         elapsed_ms = (end - start) * 1000
 

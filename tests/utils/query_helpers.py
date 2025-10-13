@@ -6,12 +6,11 @@ import httpx
 import polyline
 
 from src.core.config import settings
-from tests.utils.commons import TIME_BENCH, client, motis_payload, otp_payload
+from tests.utils.commons import TIME_BENCH, client, motis_payload
+from tests.utils.models import QueryResult, RouteSummary
 
-MAX_RETRIES = 2  # Number of retries for API calls
 
-
-def retry_api_call(func, max_retries=MAX_RETRIES):
+def retry_api_call(func, max_retries=2):
     """Retry API calls with exponential backoff."""
     import time
 
@@ -51,28 +50,32 @@ def polyline_distance(points):
 
 
 # -------------------------------------- Motis ------------------------------------ #
-def query_motis(origin, destination, time=TIME_BENCH, **kwargs):
+def query_motis(origin, destination, time=TIME_BENCH, **kwargs) -> QueryResult:
+    """Query MOTIS API and return standardized result."""
     payload = motis_payload(origin, destination, time=time, **kwargs)
     try:
         response = client.post("/ab-routing", json=payload)
         response_size = len(response.content)
         data = response.json()
-        return data, response_size
+        return QueryResult.success_result(data, response_size)
     except Exception as e:
-        print(f"Error calling AB-routing for {origin} -> {destination}: {e}")
-        return None, None
+        error_msg = f"Error calling AB-routing for {origin} -> {destination}: {e}"
+        print(error_msg)
+        return QueryResult.error_result(error_msg)
 
 
-def extract_motis_route_summary(result):
+def extract_motis_route_summary(result: Dict[str, Any]) -> RouteSummary:
+    """Extract route summary from MOTIS response data."""
     routes = result.get("result", {}).get("itineraries", [])
+    direct_routes = result.get("result", {}).get("direct", [])
+
     if routes:
         route = routes[0]
     else:
         # Try direct route if no itineraries
-        direct_routes = result.get("result", {}).get("direct", [])
         if not direct_routes:
             print("No route found:", result)
-            return None
+            return RouteSummary.empty_summary()
         route = direct_routes[0]
 
     # Total duration
@@ -99,6 +102,7 @@ def extract_motis_route_summary(result):
             )
         else:
             print(f"Warning: No distance found for leg: {leg}")
+
     # Modes and vehicle lines
     modes, vehicle_lines = [], []
     for leg in route.get("legs", []):
@@ -115,12 +119,14 @@ def extract_motis_route_summary(result):
         route_name = leg.get("routeShortName")
         if route_name:
             vehicle_lines.append(route_name)
-    return {
-        "duration": duration,
-        "distance": distance,
-        "modes": modes,
-        "vehicle_lines": vehicle_lines,
-    }
+
+    return RouteSummary(
+        duration_s=duration,
+        distance_m=distance,
+        num_routes=len(routes) if routes else len(direct_routes),
+        modes=modes,
+        vehicle_lines=vehicle_lines,
+    )
 
 
 # --------------------------- Google ---------------------- #
@@ -130,7 +136,8 @@ def query_google(
     mode="transit",
     time=TIME_BENCH,
     api_key=str(settings.GOOGLE_API_KEY),
-):
+) -> QueryResult:
+    """Query Google Directions API and return standardized result."""
     dt = datetime.fromisoformat(time.replace("Z", "+00:00"))
     departure_timestamp = int(dt.timestamp())
     params = {
@@ -152,30 +159,29 @@ def query_google(
             return data, response_size
 
     try:
-        return retry_api_call(make_request)
-    except httpx.HTTPError as e:
-        print(f"HTTP Error occurred while calling Google Directions API: {e}")
-        return None, None
+        data, response_size = retry_api_call(make_request)
+        return QueryResult.success_result(data, response_size)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        return None, None
+        error_msg = f"Error calling Google Directions API: {e}"
+        return QueryResult.error_result(error_msg)
 
 
 def extract_google_route_summary(directions_result):
     """
     Extract only the first route summary from a Google Directions API response.
+    Returns a RouteSummary object.
     """
     routes = directions_result.get("routes", [])
     if not routes:
-        return None
+        return RouteSummary.empty_summary()
 
     legs = routes[0].get("legs", [])
     if not legs:
-        return None
+        return RouteSummary.empty_summary()
 
     leg = legs[0]  # take first leg
-    duration = leg["duration"]["value"]
-    distance = leg["distance"]["value"]
+    duration = leg.get("duration", {}).get("value", 0)
+    distance = leg.get("distance", {}).get("value", 0)
 
     modes, vehicle_lines = [], []
     for step in leg.get("steps", []):
@@ -191,12 +197,49 @@ def extract_google_route_summary(directions_result):
         else:
             modes.append(step.get("travel_mode", "UNKNOWN"))
 
-    return {
-        "duration": duration,
-        "distance": distance,
-        "modes": modes,
-        "vehicle_lines": vehicle_lines,
-    }
+    return RouteSummary(
+        duration_s=duration,
+        distance_m=distance,
+        num_routes=len(routes),
+        modes=modes,
+        vehicle_lines=vehicle_lines,
+    )
+
+
+def extract_google_driving_route_summary(response: Dict[str, Any]) -> RouteSummary:
+    """Extract route summary from Google Maps driving directions."""
+
+    if not response or "routes" not in response:
+        return RouteSummary.empty_summary()
+
+    routes = response["routes"]
+    if not routes:
+        return RouteSummary.empty_summary()
+
+    # Use the first route
+    route = routes[0]
+    legs = route.get("legs", [])
+
+    if not legs:
+        return RouteSummary.empty_summary()
+
+    # Sum up all legs
+    total_duration = 0
+    total_distance = 0
+
+    for leg in legs:
+        duration = leg.get("duration", {}).get("value", 0)
+        distance = leg.get("distance", {}).get("value", 0)
+        total_duration += duration
+        total_distance += distance
+
+    return RouteSummary(
+        duration_s=total_duration,
+        distance_m=total_distance,
+        num_routes=len(routes),
+        modes=["DRIVING"],  # For driving routes, always just DRIVING
+        vehicle_lines=[],  # No vehicle lines for driving
+    )
 
 
 # -------------------------- Valhalla ---------------------- #
@@ -329,105 +372,4 @@ def extract_valhalla_route_summary(result: Dict[str, Any]) -> Optional[Dict[str,
             if has_transit_data
             else "Multimodal routing without transit data"
         ),
-    }
-
-
-# -------------------------- OTP ---------------------- #
-def query_otp(
-    origin,
-    destination,
-    endpoint: str = str(settings.OPEN_TRIP_PLANNER_URL),
-) -> Tuple[Dict[str, Any], int]:
-    """Query OpenTripPlanner GraphQL API."""
-    origin_str = f"{origin[0]},{origin[1]}"
-    destination_str = f"{destination[0]},{destination[1]}"
-
-    payload = otp_payload(origin_str, destination_str)
-
-    try:
-        with httpx.Client() as client_http:
-            response = client_http.post(
-                endpoint,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            if "errors" in data:
-                print(f"OTP GraphQL errors: {data['errors']}")
-                return {}, 0
-
-            return data, len(response.content)
-
-    except httpx.HTTPError as e:
-        print(f"HTTP Error: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-
-    return {}, 0
-
-
-def extract_otp_route_summary(response: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract route summary from OTP GraphQL response."""
-    if not response or "data" not in response:
-        return {
-            "duration": 0,
-            "distance": 0,
-            "num_routes": 0,
-            "modes": [],
-            "vehicle_lines": [],
-        }
-
-    plan = response["data"].get("plan", {})
-    itineraries = plan.get("itineraries", [])
-
-    if not itineraries:
-        return {
-            "duration": 0,
-            "distance": 0,
-            "num_routes": 0,
-            "modes": [],
-            "vehicle_lines": [],
-        }
-
-    # Use the first itinerary for summary
-    first_itinerary = itineraries[0]
-
-    # Extract basic metrics
-    duration = first_itinerary.get("duration", 0)  # seconds
-
-    # Calculate total distance by summing all leg distances
-    total_distance = 0.0
-    for leg in first_itinerary.get("legs", []):
-        leg_distance = leg.get("distance", 0)  # meters
-        total_distance += leg_distance
-
-    # Extract modes and vehicle lines from legs
-    modes = set()
-    vehicle_lines = set()
-
-    for leg in first_itinerary.get("legs", []):
-        mode = leg.get("mode", "")
-        if mode:
-            modes.add(mode)
-
-        # Extract route info for transit legs
-        if leg.get("transitLeg"):
-            route = leg.get("route", {})
-            if isinstance(route, dict):
-                short_name = route.get("shortName", "")
-                if short_name:
-                    vehicle_lines.add(short_name)
-            elif isinstance(route, str) and route:
-                vehicle_lines.add(route)
-
-    return {
-        "duration": duration,
-        "distance": round(
-            total_distance / 1000.0, 3
-        ),  # Convert meters to kilometers and round
-        "num_routes": len(itineraries),
-        "modes": sorted(modes),
-        "vehicle_lines": sorted(vehicle_lines),
     }

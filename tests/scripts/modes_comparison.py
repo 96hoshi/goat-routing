@@ -1,12 +1,14 @@
 """
 Clean routing comparison with proper separation of transport vs driving modes.
-- Transport: MOTIS (transit), Google (transit), Valhalla-GTFS (multimodal)
+- Transport: MOTIS (transit), Google (transit), OTP (multimodal), Valhalla (auto)
 - Driving: Google (driving), Valhalla-NoGTFS (auto)
 """
 
 from tests.conftest import write_result
 from tests.utils.commons import coordinates_list
+from tests.utils.models import RouteSummary
 from tests.utils.query_helpers import (
+    extract_google_driving_route_summary,
     extract_google_route_summary,
     extract_motis_route_summary,
     query_google,
@@ -27,64 +29,45 @@ TRANSPORT_SERVICES = {
         "query_params": {"mode": "transit"},
         "routes_path": ["routes"],
     },
-    # "valhalla_gtfs": {
-    #     "query_func": query_valhalla,
-    #     "extract_func": extract_valhalla_route_summary,
-    #     "query_params": {"costing": "multimodal"},
-    #     "routes_path": ["trip", "legs"],
-    #     "extra_fields": ["transit_stops", "agencies", "has_gtfs_data"],
-    # },
-    # "otp": {
-    #     "query_func": query_otp,
-    #     "extract_func": extract_otp_route_summary,
-    #     "query_params": {
-    #         "transport_modes": ["TRANSIT", "WALK"]
-    #     },  # Fixed parameter name
-    #     "routes_path": [
-    #         "data",
-    #         "plan",
-    #         "itineraries",
-    #     ],  # Fixed path for GraphQL response
-    #     "extra_fields": ["transit_stops", "agencies"],
-    # },
 }
 
 # Driving services (car routing)
 DRIVING_SERVICES = {
     "google": {
         "query_func": query_google,
-        "extract_func": extract_google_route_summary,
+        "extract_func": extract_google_driving_route_summary,
         "query_params": {"mode": "driving"},
         "routes_path": ["routes"],
     },
-    # "valhalla": {
-    #     "query_func": query_valhalla,
-    #     "extract_func": extract_valhalla_route_summary,
-    #     "query_params": {"costing": "auto"},
-    #     "routes_path": ["trip", "legs"],
-    #     "use_no_gtfs_endpoint": True,
-    # },
 }
-
-# Common fields for all services
-BASE_FIELDS = ["duration", "distance", "modes", "vehicle_lines"]
 
 
 def query_service_for_mode(service_name, service_config, origin, destination):
     """Query a service with its specific configuration."""
     try:
         query_func = service_config["query_func"]
+        params = service_config["query_params"].copy()
 
-        # Handle special case for no-GTFS Valhalla
-        if service_config.get("use_no_gtfs_endpoint"):
-            # Use the no-GTFS Valhalla endpoint
-            params = service_config["query_params"].copy()
-            return query_func(origin, destination, **params)
+        # Call the query function
+        result = query_func(origin, destination, **params)
+
+        # Handle different return types
+        if hasattr(result, "success"):
+            # QueryResult object
+            if result.success:
+                return result.data, result.response_size
+            else:
+                print(f"❌ {service_name} query failed: {result.error_message}")
+                return None, None
+        elif isinstance(result, tuple) and len(result) == 2:
+            # Tuple format (data, size) - works for OTP, Google, MOTIS
+            return result[0], result[1]
         else:
-            return query_func(origin, destination, **service_config["query_params"])
+            print(f"⚠️ Unexpected return format from {service_name}: {type(result)}")
+            return None, None
 
     except Exception as e:
-        print(f"Error querying {service_name}: {e}")
+        print(f"❌ Error querying {service_name}: {e}")
         return None, None
 
 
@@ -106,45 +89,50 @@ def get_route_count(service_config, result):
 def extract_service_data(service_name, service_config, result, size, mode):
     """Extract standardized data from service result."""
     extract_func = service_config["extract_func"]
-    summary = extract_func(result) if result else None
-    num_routes = get_route_count(service_config, result)
 
+    try:
+        summary = extract_func(result) if result else None
+    except Exception as e:
+        print(f"⚠️ Error extracting {service_name} summary: {e}")
+        summary = None
+
+    num_routes = get_route_count(service_config, result)
     data = {}
 
-    # Add base fields
-    for field in BASE_FIELDS:
-        if summary and field in summary:
-            if field in ["modes", "vehicle_lines"] and isinstance(summary[field], list):
-                data[f"{service_name}_{field}_{mode}"] = "|".join(summary[field])
-            else:
-                data[f"{service_name}_{field}_{mode}"] = summary[field]
-        else:
-            data[f"{service_name}_{field}_{mode}"] = ""
+    if summary and isinstance(summary, RouteSummary):
+        # Use RouteSummary attributes directly
+        data[f"{service_name}_duration_{mode}"] = summary.duration_s
+        data[f"{service_name}_distance_{mode}"] = summary.distance_m
+        data[f"{service_name}_modes_{mode}"] = (
+            "|".join(summary.modes) if summary.modes else ""
+        )
+        data[f"{service_name}_vehicle_lines_{mode}"] = (
+            "|".join(summary.vehicle_lines) if summary.vehicle_lines else ""
+        )
+    else:
+        # Empty values if no summary
+        data[f"{service_name}_duration_{mode}"] = ""
+        data[f"{service_name}_distance_{mode}"] = ""
+        data[f"{service_name}_modes_{mode}"] = ""
+        data[f"{service_name}_vehicle_lines_{mode}"] = ""
 
     # Add standard fields
-    data[f"{service_name}_response_size_{mode}"] = size if size is not None else ""
+    data[f"{service_name}_response_size_{mode}"] = size if size is not None else 0
     data[f"{service_name}_num_routes_{mode}"] = num_routes
-
-    # Add extra fields for specific services
-    extra_fields = service_config.get("extra_fields", [])
-    for field in extra_fields:
-        if summary and field in summary:
-            if isinstance(summary[field], list):
-                data[f"{service_name}_{field}_{mode}"] = "|".join(summary[field])
-            else:
-                data[f"{service_name}_{field}_{mode}"] = summary[field]
-        else:
-            data[f"{service_name}_{field}_{mode}"] = ""
 
     return data
 
 
 def get_headers_for_services(services, mode):
-    """Generate CSV headers for a set of services."""
+    """Generate CSV headers for a set of services using RouteSummary attributes."""
     headers = []
-    for service_name, service_config in services.items():
-        # Base fields
-        for field in BASE_FIELDS:
+
+    # Get RouteSummary field names (excluding num_routes as it's handled separately)
+    route_fields = ["duration", "distance", "modes", "vehicle_lines"]
+
+    for service_name in services.keys():
+        # RouteSummary fields
+        for field in route_fields:
             headers.append(f"{service_name}_{field}_{mode}")
 
         # Standard fields
@@ -154,10 +142,6 @@ def get_headers_for_services(services, mode):
                 f"{service_name}_num_routes_{mode}",
             ]
         )
-
-        # Extra fields
-        for field in service_config.get("extra_fields", []):
-            headers.append(f"{service_name}_{field}_{mode}")
 
     return headers
 
@@ -171,7 +155,11 @@ def test_transport_routing():
         TRANSPORT_SERVICES, mode
     )
 
-    for origin, destination in coordinates_list:
+    print(f"🚌 Testing {len(coordinates_list)} transport routes...")
+
+    for i, (origin, destination) in enumerate(coordinates_list, 1):
+        print(f"\n[{i}/{len(coordinates_list)}] Testing {origin} → {destination}")
+
         row = {
             "origin": origin,
             "destination": destination,
@@ -190,6 +178,7 @@ def test_transport_routing():
 
         write_result(row, filename=filename, headers=headers)
 
+    print(f"✅ Transport comparison saved to {filename}")
     return filename
 
 
@@ -202,7 +191,9 @@ def test_driving_routing():
         DRIVING_SERVICES, mode
     )
 
-    for origin, destination in coordinates_list:
+    print(f"🚗 Testing {len(coordinates_list)} driving routes...")
+
+    for _i, (origin, destination) in enumerate(coordinates_list, 1):
         row = {
             "origin": origin,
             "destination": destination,
@@ -221,11 +212,14 @@ def test_driving_routing():
 
         write_result(row, filename=filename, headers=headers)
 
+    print(f"✅ Driving comparison saved to {filename}")
     return filename
 
 
 def compare_all_routing_modes(verbose=False):
     """Compare both transport and driving routing modes."""
+    print("🗺️ Starting routing modes comparison...")
+    print("=" * 60)
 
     # Test transport routing
     transport_file = test_transport_routing()
@@ -234,8 +228,9 @@ def compare_all_routing_modes(verbose=False):
     driving_file = test_driving_routing()
 
     if verbose:
-        print(f"Transport comparison saved to {transport_file}")
-        print(f"Driving comparison saved to {driving_file}")
+        print("\n📊 Results:")
+        print(f"   Transport: /app/tests/results/{transport_file}")
+        print(f"   Driving: /app/tests/results/{driving_file}")
 
 
 if __name__ == "__main__":

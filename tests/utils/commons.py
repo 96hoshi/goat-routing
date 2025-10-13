@@ -16,35 +16,26 @@ from .benchmark_helpers import (
     otp_query_service,
 )
 
-# FastAPI test client setup
-app = FastAPI()
-app.include_router(router)
-client = TestClient(app)
-
-# httpx client for external APIs
-external_client = httpx.Client()
-coordinates_list = mannheim_coordinates
-
-# Benchmark result file
-RESULT_FILE = "benchmark_results.csv"
-RESULT_HEADERS = []
 RESULT_DIR = "tests/results/"
 RESPONSES_DIR = "tests/results/responses/"
 IMAGES_DIR = "tests/results/images/"
-
 # Benchmark time: tomorrow at 08:00 UTC
 TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
     hour=8, minute=0, second=0, microsecond=0
 ).isoformat() + "Z"
 
+# FastAPI test client setup
+app = FastAPI()
+app.include_router(router)
+client = TestClient(app)
+# httpx client for external APIs
+external_client = httpx.Client()
 
-def parse_coords(coord_str):
-    """Parse coordinate string 'lat,lon' into tuple of floats."""
-    lat, lon = map(float, coord_str.split(","))
-    return lat, lon
+# Test coordinates list (latitude,longitude)
+coordinates_list = mannheim_coordinates
 
 
-# Motis payload builder
+# ----------- PAYLOAD BUILDERS ----------- #
 def motis_payload(
     origin: str,
     destination: str,
@@ -64,11 +55,6 @@ def motis_payload(
         "maxItineraries": "6",  # Request up to 6 itineraries all is default
         **kwargs,
     }
-
-
-FROM, TO = coordinates_list[5]
-
-MOTIS_PAYLOAD_BENCH = motis_payload(FROM, TO)
 
 
 def google_payload(
@@ -115,10 +101,9 @@ def valhalla_payload(
 def otp_payload(
     origin: str,
     destination: str,
-    # transport_modes: list[str] = ["CAR"],
+    transport_modes: list[str] = ["TRANSIT", "WALK"],
     time: str = TIME_BENCH.split("T")[1].replace("Z", ""),
     date: str = TIME_BENCH.split("T")[0],
-    num_itineraries: int = 1,
 ) -> dict[str, Any]:
     """Build minimal GraphQL payload for OTP CAR test."""
 
@@ -133,14 +118,14 @@ def otp_payload(
           $to: InputCoordinates!,
           $date: String!,
           $time: String!,
-          $numItineraries: Int
+          $transportModes: [TransportMode!]!
         ) {
           plan(
             from: $from,
             to: $to,
             date: $date,
             time: $time,
-            numItineraries: $numItineraries
+            transportModes: $transportModes
           ) {
             date
             from { name lat lon }
@@ -157,25 +142,29 @@ def otp_payload(
                 distance
                 from { name lat lon }
                 to { name lat lon }
+                route {
+                  shortName
+                  longName
+                }
               }
             }
           }
         }
-    """
+        """
     )
 
     variables = {
         "from": parse_coords(origin),
         "to": parse_coords(destination),
-        # "transportModes": [{"mode": mode} for mode in transport_modes],
+        "transportModes": [{"mode": mode} for mode in transport_modes],
         "date": date,
         "time": time,
-        "numItineraries": num_itineraries,
     }
 
     return {"query": query.strip(), "variables": variables}
 
 
+# ----------- SERVICE CONFIGURATION ----------- #
 SERVICES = [
     {
         "name": "motis",

@@ -4,11 +4,13 @@ import os
 
 import pytest
 
-from tests.utils.commons import RESULT_DIR, RESULT_FILE
+from tests.utils.commons import RESULT_DIR
 
+# Benchmark result file
+RESULT_FILE = "benchmark_results.csv"
 # --- Configuration for Reporters ---
 RESPONSES_DIR = "tests/results/responses/"
-BENCHMARK_FILE = os.path.join(RESULT_DIR, "benchmark_results.csv")
+BENCHMARK_FILE = os.path.join(RESULT_DIR, RESULT_FILE)
 BENCHMARK_HEADERS = [
     "service",
     "origin",
