@@ -6,12 +6,14 @@ import psutil
 
 from src.core.config import settings
 from tests.conftest import write_response, write_result
-from tests.utils.commons import coordinates_list, otp_payload
+from tests.utils.commons import coordinates_list
 from tests.utils.models import RouteSummary, ServiceMetrics
+from tests.utils.payload_builders import otp_payload
 
+# Consistent CSV filenames
+OTP_TRANSPORT_CSV_FILE = "otp_routes_transport.csv"
+OTP_DRIVING_CSV_FILE = "otp_routes_driving.csv"
 OTP_PERFORMANCE_FILE = "otp_performance.csv"
-OTP_ROUTING_FILE = "otp_routes.csv"
-MODE = "CAR"  # or "TRANSIT"
 
 
 @dataclass
@@ -77,10 +79,8 @@ def extract_otp_route_summary(response) -> RouteSummary:
     if not response or "data" not in response:
         return empty_summary()
 
-    print("Full OTP response:", response)
     plan = response["data"].get("plan", {})
     itineraries = plan.get("itineraries", [])
-    print(f"Extracted {len(itineraries)} itineraries from OTP response")
     if not itineraries:
         return empty_summary()
 
@@ -122,6 +122,7 @@ def extract_otp_route_summary(response) -> RouteSummary:
 def benchmark_otp_query(
     origin: str,
     destination: str,
+    transport_modes: list[str] = ["TRANSIT", "WALK"],
     endpoint: str = str(settings.OPEN_TRIP_PLANNER_URL),
 ) -> ServiceMetrics:
     """
@@ -130,7 +131,7 @@ def benchmark_otp_query(
     """
 
     # Use minimal payload that works
-    payload = otp_payload(origin, destination)
+    payload = otp_payload(origin, destination, transport_modes=transport_modes)
 
     # Performance measurement setup
     process = psutil.Process()
@@ -149,7 +150,7 @@ def benchmark_otp_query(
                 endpoint,
                 json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=30.0,
+                timeout=45.0,
             )
 
             status_code = response.status_code
@@ -207,8 +208,6 @@ def benchmark_otp_query(
             if not itineraries:
                 print("ℹ️ OTP: No routes found for the given parameters")
             else:
-                print(f"✅ OTP: Found {len(itineraries)} route(s)")
-
                 # Log route details for debugging
                 for i, itin in enumerate(itineraries[:2]):  # Show first 2 routes
                     duration = itin.get("duration", 0)
@@ -227,13 +226,20 @@ def benchmark_otp_query(
     )
 
 
-def test_otp_performance():
+def test_otp_performance(mode: str = "TRANSIT"):
     """Test OTP routing with performance metrics."""
+    if mode == "CAR":
+        transport_modes = ["WALK", "CAR"]
+    else:
+        transport_modes = ["TRANSIT", "WALK"]
+
     for origin, destination in coordinates_list:
         print(f"\n🧪 Testing {origin} -> {destination}")
 
         # Benchmark the OTP query
-        metrics = benchmark_otp_query(origin, destination)
+        metrics = benchmark_otp_query(
+            origin, destination, transport_modes=transport_modes
+        )
 
         # Prepare stats object
         stats = OtpPerformanceStats(
@@ -258,36 +264,91 @@ def test_otp_performance():
         )
 
 
-def test_otp_routing():
+def test_otp_routing(mode: str = "TRANSIT"):
+    """Test OTP routing and write to consistent comparison CSV files."""
+
     # Test coordinates (Mannheim area) for car routing
     def parse_coords(coord_str):
         lat, lon = map(float, coord_str.split(","))
         return lat, lon
 
-    if MODE == "CAR":
+    if mode == "CAR":
         transport_modes = ["WALK", "CAR"]
+        csv_filename = OTP_DRIVING_CSV_FILE
+        mode_suffix = "driving"
+        print(f"🚗 Testing OTP driving routes, writing to {csv_filename}")
     else:
         transport_modes = ["TRANSIT", "WALK"]
+        csv_filename = OTP_TRANSPORT_CSV_FILE
+        mode_suffix = "transport"
+        print(f"🚌 Testing OTP transport routes, writing to {csv_filename}")
 
-    for coord in coordinates_list:
+    for i, coord in enumerate(coordinates_list, 1):
         origin = parse_coords(coord[0])
         destination = parse_coords(coord[1])
 
+        print(f"\n[{i}/{len(coordinates_list)}] Testing {coord[0]} → {coord[1]}")
+
         data, size = query_otp(origin, destination, transport_modes=transport_modes)
         summary = extract_otp_route_summary(data)
+
+        # Prepare row data in comparison format
         row = {
             "origin": coord[0],
             "destination": coord[1],
-            "resp_size_b": size,
+            "routing_mode": "Public Transport" if mode == "TRANSIT" else "Driving",
+            "duration_s": summary.duration_s if summary else 0,
+            "distance_m": summary.distance_m if summary else 0,
+            "modes": ("|".join(summary.modes) if summary and summary.modes else ""),
+            "vehicle_lines": (
+                "|".join(summary.vehicle_lines)
+                if summary and summary.vehicle_lines
+                else ""
+            ),
+            "response_size_b": size,
+            "num_routes": summary.num_routes if summary else 0,
         }
-        # Convert summary to dict if it's a dataclass or custom object
-        if hasattr(summary, "__dict__"):
-            row.update(summary.__dict__)
-        write_result(row, filename=OTP_ROUTING_FILE, headers=list(row.keys()))
-        write_response(data, f"otp_{coord[0]}_{coord[1]}_{MODE}.json".replace(",", "_"))
+
+        # Write to comparison CSV
+        write_result(row, filename=csv_filename, headers=list(row.keys()))
+
+        # Save response for debugging
+        response_filename = f"otp_{coord[0]}_{coord[1]}_{mode_suffix}.json".replace(
+            ",", "_"
+        )
+        write_response(data, response_filename)
+
+        print(
+            f"   ✅ Duration: {row['duration_s']}, "
+            f"Distance: {row['distance_m']}, "
+            f"Routes: {row['num_routes']}"
+        )
+
+    print(f"✅ OTP {mode_suffix} results saved to {csv_filename}")
+
+
+def test_both_modes():
+    """Test both transport and driving modes, always writing to comparison files."""
+    print("🗺️ Testing OTP for both transport and driving modes")
+    print("=" * 60)
+
+    # Test transport mode
+    print("\n🚌 Starting TRANSIT mode testing...")
+    test_otp_routing(mode="TRANSIT")
+    test_otp_performance(mode="TRANSIT")
+
+    # Test driving mode
+    print("\n🚗 Starting CAR mode testing...")
+    test_otp_routing(mode="CAR")
+    # test_otp_performance(mode="CAR")
+
+    print("\n✅ All OTP tests completed!")
+    print(f"   Transport results: {OTP_TRANSPORT_CSV_FILE}")
+    print(f"   Driving results: {OTP_DRIVING_CSV_FILE}")
+    print(f"   Performance data: {OTP_PERFORMANCE_FILE}")
 
 
 # Example usage and testing
 if __name__ == "__main__":
-    test_otp_routing()
-    test_otp_performance()
+    # Always test both modes and write to comparison files
+    test_both_modes()

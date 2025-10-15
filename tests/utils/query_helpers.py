@@ -1,13 +1,18 @@
 import math
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
 import polyline
 
 from src.core.config import settings
-from tests.utils.commons import TIME_BENCH, client, motis_payload
+from tests.conftest import TIME_BENCH
+from tests.utils.commons import client
 from tests.utils.models import QueryResult, RouteSummary
+from tests.utils.payload_builders import (
+    google_payload,
+    motis_payload,
+    valhalla_payload,
+)
 
 
 def retry_api_call(func, max_retries=2):
@@ -54,7 +59,7 @@ def query_motis(origin, destination, time=TIME_BENCH, **kwargs) -> QueryResult:
     """Query MOTIS API and return standardized result."""
     payload = motis_payload(origin, destination, time=time, **kwargs)
     try:
-        response = client.post("/ab-routing", json=payload)
+        response = client.post(settings.MOTIS_ROUTE, json=payload)
         response_size = len(response.content)
         data = response.json()
         return QueryResult.success_result(data, response_size)
@@ -138,16 +143,8 @@ def query_google(
     api_key=str(settings.GOOGLE_API_KEY),
 ) -> QueryResult:
     """Query Google Directions API and return standardized result."""
-    dt = datetime.fromisoformat(time.replace("Z", "+00:00"))
-    departure_timestamp = int(dt.timestamp())
-    params = {
-        "origin": origin,
-        "destination": destination,
-        "mode": mode,
-        "departure_time": departure_timestamp,
-        "key": api_key,
-        "alternatives": "true",  # default is 1
-    }
+
+    params = google_payload(origin, destination, mode=mode, time=time, api_key=api_key)
     url = str(settings.GOOGLE_DIRECTIONS_URL)
 
     def make_request():
@@ -250,38 +247,16 @@ def query_valhalla(
     endpoint: Optional[str] = None,
     **kwargs,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
-    # Parse coordinates
-    origin_lat, origin_lon = map(float, origin.split(","))
-    dest_lat, dest_lon = map(float, destination.split(","))
+    """Query Valhalla API and return standardized result."""
+    payload = valhalla_payload(
+        origin, destination, costing=costing, time=TIME_BENCH, **kwargs
+    )
 
-    payload = {
-        "locations": [
-            {"lat": origin_lat, "lon": origin_lon},
-            {"lat": dest_lat, "lon": dest_lon},
-        ],
-        "costing": costing,
-        "directions_options": {
-            "units": "kilometers",
-            "narrative": True,
-        },
-        **kwargs,
-    }
-
-    # Add date_time for multimodal routing
-    if costing == "multimodal":
-        payload["date_time"] = {
-            "type": 1,  # departure time
-            "value": TIME_BENCH,  # use the same time as other services
-        }
-
-    # Choose endpoint based on parameter or service type
     if endpoint:
         url = endpoint
     elif costing == "auto":
-        # Use no-GTFS endpoint for car routing
         url = settings.VALHALLA_NO_GTFS_URL
     else:
-        # Use GTFS-enabled endpoint for multimodal/transit routing
         url = settings.VALHALLA_URL
 
     try:
@@ -300,15 +275,15 @@ def query_valhalla(
         return None, None
 
 
-def extract_valhalla_route_summary(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def extract_valhalla_route_summary(result: Dict[str, Any]) -> RouteSummary:
     if not result or "trip" not in result:
-        return None
+        return RouteSummary.empty_summary()
 
     trip = result["trip"]
     legs = trip.get("legs", [])
 
     if not legs:
-        return None
+        return RouteSummary.empty_summary()
 
     # Calculate totals from legs
     total_time = trip.get("summary", {}).get("time", 0)  # in seconds
@@ -316,9 +291,7 @@ def extract_valhalla_route_summary(result: Dict[str, Any]) -> Optional[Dict[str,
 
     # Extract transit and routing information
     modes = []
-    vehicle_lines = []  # Bus/train line numbers from GTFS
-    transit_stops = []
-    agencies = []
+    vehicle_lines = []
 
     for leg in legs:
         # Extract travel mode/type
@@ -342,34 +315,10 @@ def extract_valhalla_route_summary(result: Dict[str, Any]) -> Optional[Dict[str,
                 if short_name and short_name not in vehicle_lines:
                     vehicle_lines.append(short_name)
 
-                # Extract agency information
-                agency_name = transit_info.get("agency_name")
-                if agency_name and agency_name not in agencies:
-                    agencies.append(agency_name)
-
-                # Extract stop names
-                stop_name = transit_info.get("stop_name")
-                if stop_name and stop_name not in transit_stops:
-                    transit_stops.append(stop_name)
-
-    # Determine if this is a transit-enabled route
-    has_transit_data = len(vehicle_lines) > 0 or any(
-        mode in ["transit", "bus", "rail", "tram", "subway"] for mode in modes
+    return RouteSummary(
+        duration_s=total_time,
+        distance_m=total_length * 1000,  # convert km to meters for consistency
+        num_routes=1,
+        modes=modes,
+        vehicle_lines=vehicle_lines,
     )
-
-    return {
-        "duration": total_time,
-        "distance": total_length * 1000,  # convert km to meters for consistency
-        "modes": modes,  # Travel modes (walking, transit, etc.)
-        "vehicle_lines": vehicle_lines,  # Bus/train line numbers from GTFS
-        "transit_stops": transit_stops[:5],  # Transit stops used
-        "agencies": agencies,
-        "total_transit_stops": len(transit_stops),
-        "has_gtfs_data": has_transit_data,
-        "costing_used": "multimodal_gtfs" if has_transit_data else "multimodal_no_gtfs",
-        "note": (
-            "GTFS-enabled multimodal routing with actual transit lines"
-            if has_transit_data
-            else "Multimodal routing without transit data"
-        ),
-    }

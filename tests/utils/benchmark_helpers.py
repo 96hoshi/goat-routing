@@ -3,49 +3,61 @@ import time
 import httpx
 import psutil
 
-from tests.utils.models import ServiceMetrics  # Import our new dataclass
+from tests.utils.models import ServiceMetrics
 
 
-# 2. GENERIC WRAPPER: For services with standard success criteria (HTTP 2xx).
+def build_result_row(
+    service, origin, dest, avg_time, avg_cpu, avg_mem, response_size, rounds
+):
+    return {
+        "service": service["name"],
+        "origin": origin,
+        "destination": dest,
+        "avg_time_ms": f"{avg_time:.3f}",
+        "avg_cpu_s": f"{avg_cpu:.4f}",
+        "avg_mem_mb_delta": f"{avg_mem:.4f}",
+        "avg_response_size_bytes": f"{response_size:.0f}",
+        "rounds": rounds,
+    }
+
+
 def generic_query_service(client, endpoint, payload, method) -> ServiceMetrics:
-    """A standard query that just relies on the core measurement function."""
+    """Standard query for services with HTTP 2xx success criteria."""
     return _measure_request(client, endpoint, payload, method)
 
 
-# 3. SPECIALIZED WRAPPER: For Google, which has unique success criteria.
 def google_query_service(client, endpoint, payload, method) -> ServiceMetrics:
-    """Wrapper for Google that checks the inner JSON status field."""
+    """Google-specific wrapper that validates API status."""
     metrics = _measure_request(client, endpoint, payload, method)
-    # Add the special Google-specific logic here if needed, for example:
+
+    # Validate Google's nested status
     if metrics.status_code == 200 and isinstance(metrics.response_data, dict):
-        if metrics.response_data.get("status") not in ["OK", "ZERO_RESULTS"]:
-            print(
-                f"Warning: Google API returned outer 200 OK but inner status of '{metrics.response_data.get('status')}'"
-            )
+        google_status = metrics.response_data.get("status")
+        # You can add logic here if you want to handle non-OK statuses
+        if google_status not in ["OK", "ZERO_RESULTS"]:
+            print(f"⚠️ Google API returned status: {google_status}")
+
     return metrics
 
 
-# 4. SPECIALIZED WRAPPER: For OTP GraphQL, which has unique GraphQL error handling.
 def otp_query_service(client, endpoint, payload, method) -> ServiceMetrics:
-    """Wrapper for OpenTripPlanner that checks GraphQL errors in addition to HTTP status."""
+    """OTP GraphQL wrapper with error checking."""
     metrics = _measure_request(client, endpoint, payload, method)
 
-    # Add OTP-specific GraphQL error checking
     if metrics.status_code == 200 and isinstance(metrics.response_data, dict):
+        # Check for GraphQL errors
         if "errors" in metrics.response_data:
-            print(
-                f"Warning: OTP returned HTTP 200 but GraphQL errors: {metrics.response_data['errors']}"
-            )
-            # Log the error details but don't fail the benchmark
+            print(f"⚠️ OTP GraphQL errors: {metrics.response_data['errors']}")
+
+        # Check for successful data
         elif "data" in metrics.response_data:
             plan = metrics.response_data.get("data", {}).get("plan", {})
             itineraries = plan.get("itineraries", [])
+
             if not itineraries:
-                print("Info: OTP returned successful response but found no routes")
-            else:
-                print(f"Success: OTP found {len(itineraries)} route(s)")
+                print("ℹ️ OTP: No routes found")
         else:
-            print("Warning: OTP returned unexpected GraphQL response structure")
+            print("⚠️ OTP: Unexpected response structure")
 
     return metrics
 
@@ -53,76 +65,83 @@ def otp_query_service(client, endpoint, payload, method) -> ServiceMetrics:
 def _measure_request(
     client: httpx.Client, endpoint: str, payload: dict, method: str = "POST"
 ) -> ServiceMetrics:
-    """
-    Performs a single request and measures associated performance metrics.
-    This is the core, low-level measurement function. It does not make
-    any assumptions about what a "successful" request is beyond the
-    HTTP level; its job is simply to measure and report.
-    """
+    """Core measurement function with improved error handling."""
     process = psutil.Process()
     response_size = 0
     status_code = -1
     response_data = {}
 
-    # --- Measurement starts here ---
+    # Measurement starts
     mem_before_mb = process.memory_info().rss / (1024 * 1024)
     cpu_times_before = process.cpu_times()
     start_time = time.perf_counter()
 
     try:
-        # Determine the HTTP method and make the request
+        # Determine timeout based on method/service type
+        timeout = 45.0
+        if method.upper() == "POST" and any(
+            key in str(payload) for key in ["plan", "itineraries"]
+        ):
+            timeout = 60.0  # Longer timeout for complex routing queries
+
+        # Make the HTTP request
         if method.upper() == "POST":
-            response = client.post(endpoint, json=payload, timeout=30.0)
-        else:  # Assumes GET for everything else
-            response = client.get(endpoint, params=payload, timeout=30.0)
+            response = client.post(endpoint, json=payload, timeout=timeout)
+        else:
+            response = client.get(endpoint, params=payload, timeout=timeout)
 
-        # Record basic response info
         status_code = response.status_code
-
-        # This will raise an httpx.HTTPStatusError for 4xx or 5xx responses,
-        # which is caught by the except block below.
         response.raise_for_status()
 
-        # If we get here, the request was successful (2xx)
+        # Parse successful response
         response_size = len(response.content)
-        response_data = response.json()
+        try:
+            response_data = response.json()
+        except ValueError as e:
+            print(f"⚠️ JSON parsing failed: {e}")
+            response_data = {
+                "error": "Invalid JSON response",
+                "raw_content": response.text[:500],
+            }
+
+    except httpx.TimeoutException as e:
+        print(f"⏱️ Request timeout {e}")
+        response_data = {"error": "Request timed out"}
 
     except httpx.RequestError as e:
-        # Covers connection errors, timeouts, etc.
-        print(f"An HTTP request error occurred: {e.__class__.__name__} - {e}")
+        print(f"🌐 Network error: {e.__class__.__name__} - {e}")
         response_data = {"error": str(e)}
-        # status_code will remain -1 or whatever the client might have set
 
     except httpx.HTTPStatusError as e:
-        # This specifically catches 4xx and 5xx responses from raise_for_status()
-        print(f"An HTTP status error occurred: {e.response.status_code} - {e}")
+        print(f"❌ HTTP {e.response.status_code}: {e}")
         status_code = e.response.status_code
         try:
-            # Try to get error details from the response body if possible
             response_data = e.response.json()
         except Exception:
-            response_data = {"error": e.response.text or "No response body."}
+            response_data = {
+                "error": (
+                    e.response.text[:500] if e.response.text else "No response body"
+                )
+            }
 
     except Exception as e:
-        # Catch-all for other errors, like JSON decoding failures
-        print(f"An unexpected error occurred: {e.__class__.__name__} - {e}")
+        print(f"💥 Unexpected error: {e.__class__.__name__} - {e}")
         response_data = {"error": str(e)}
 
     finally:
-        # This block ALWAYS runs, ensuring we get our "after" measurements
+        # Measurement ends - this ALWAYS runs
         end_time = time.perf_counter()
         cpu_times_after = process.cpu_times()
         mem_after_mb = process.memory_info().rss / (1024 * 1024)
-    # --- Measurement ends here ---
 
-    # Calculate the deltas (changes)
+    # Calculate metrics
     duration_ms = (end_time - start_time) * 1000
     cpu_delta_s = (cpu_times_after.user + cpu_times_after.system) - (
         cpu_times_before.user + cpu_times_before.system
     )
     mem_delta_mb = mem_after_mb - mem_before_mb
 
-    # Return the structured data, no matter what happened
+    # Return with correct field names matching ServiceMetrics model
     return ServiceMetrics(
         time_ms=duration_ms,
         cpu_s=cpu_delta_s,
@@ -131,3 +150,84 @@ def _measure_request(
         status_code=status_code,
         response_data=response_data,
     )
+
+
+# Helper function to validate service responses
+def validate_service_response(metrics: ServiceMetrics, service_name: str) -> bool:
+    """Validate if a service response contains valid routing data."""
+    if metrics.status_code != 200:
+        return False
+
+    response_data = metrics.response_data
+    if not response_data or (
+        isinstance(response_data, dict) and "error" in response_data
+    ):
+        return False
+
+    # Service-specific validation
+    if service_name == "google":
+        if isinstance(response_data, dict):
+            return response_data.get("status") in ["OK", "ZERO_RESULTS"]
+
+    elif service_name == "otp":
+        if isinstance(response_data, dict):
+            if "errors" in response_data:
+                return False
+            plan = response_data.get("data", {}).get("plan", {})
+            return "itineraries" in plan
+
+    elif service_name == "motis":
+        if isinstance(response_data, dict):
+            # MOTIS has a nested structure: response_data.result.connections
+            result = response_data.get("result", {})
+            message = response_data.get("message", "")
+
+            # Check for successful message and presence of result
+            has_success_message = "successfully" in message.lower()
+            has_result = isinstance(result, dict)
+
+            # MOTIS might return empty connections but still be valid
+            return has_success_message and has_result
+
+    return True
+
+
+# Quick test function for debugging
+def test_service_directly(service_name: str):
+    """Test a service directly for debugging."""
+    from tests.utils.commons import SERVICES
+
+    service = next((s for s in SERVICES if s["name"] == service_name), None)
+    if not service:
+        print(f"❌ Service '{service_name}' not found")
+        return
+
+    # Test coordinates (Karlsruhe area)
+    origin = "49.4875,8.4660"
+    destination = "49.4817,8.4454"
+
+    try:
+        payload = service["payload_builder"](origin, destination)
+        print(f"🧪 Testing {service_name} with payload: {str(payload)[:100]}...")
+
+        metrics = service["query_func"](
+            service["client"], service["endpoint"], payload, service["method"]
+        )
+
+        print("📊 Results:")
+        print(f"   Status: {metrics.status_code}")
+        print(f"   Time: {metrics.time_ms:.2f}ms")
+        print(f"   CPU: {metrics.cpu_s:.4f}s")
+        print(f"   Memory: {metrics.mem_mb_delta:.2f}MB")
+        print(f"   Size: {metrics.response_size_bytes} bytes")
+        print(f"   Valid: {validate_service_response(metrics, service_name)}")
+
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+
+
+if __name__ == "__main__":
+    # Example usage for direct testing
+    for service_name in ["google", "otp", "motis"]:
+        test_service_directly(service_name)
+        print("-" * 40)

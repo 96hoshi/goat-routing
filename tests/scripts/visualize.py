@@ -3,15 +3,15 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from tests.utils.commons import IMAGES_DIR, RESULT_DIR
+from tests.conftest import IMAGES_DIR, RESULT_DIR
+from tests.scripts.modes_comparison import (
+    DRIVING_COMPARISON_CSV,
+    TRANSPORT_COMPARISON_CSV,
+)
+from tests.test_otp_routing import OTP_DRIVING_CSV_FILE, OTP_TRANSPORT_CSV_FILE
+from tests.utils.commons import get_available_services
 
-# Service configuration
-AVAILABLE_SERVICES = {
-    "motis": {"label": "MOTIS", "color": "#1f77b4", "marker": "o"},
-    "google": {"label": "Google Maps", "color": "#ff7f0e", "marker": "x"},
-    "valhalla": {"label": "Valhalla", "color": "#2ca02c", "marker": "s"},
-    "otp": {"label": "OTP", "color": "#d62728", "marker": "^"},
-}
+AVAILABLE_SERVICES = get_available_services()
 
 # Metrics configuration
 METRICS_CONFIG = [
@@ -25,24 +25,24 @@ METRICS_CONFIG = [
 MODE_CONFIG = {
     "transport": {
         "services": ["motis", "google", "otp"],
-        "comparison_file": "transport_comparison.csv",
-        "otp_file": "otp_routes_transport.csv",
+        "comparison_file": TRANSPORT_COMPARISON_CSV,
+        "otp_file": OTP_TRANSPORT_CSV_FILE,
         "otp_columns": {
-            "duration": "duration_seconds",
-            "distance": "distance_meters",
-            "response_size": "response_size_bytes",
+            "duration": "duration_s",
+            "distance": "distance_m",
+            "response_size": "response_size_b",
             "num_routes": "num_routes",
         },
         "emoji": "🚌",
     },
     "driving": {
         "services": ["google", "otp", "valhalla"],
-        "comparison_file": "driving_comparison.csv",
-        "otp_file": "otp_routes_driving.csv",
+        "comparison_file": DRIVING_COMPARISON_CSV,
+        "otp_file": OTP_DRIVING_CSV_FILE,
         "otp_columns": {
             "duration": "duration_s",
             "distance": "distance_m",
-            "response_size": "resp_size_b",
+            "response_size": "response_size_b",
             "num_routes": "num_routes",
         },
         "emoji": "🚗",
@@ -117,6 +117,9 @@ def plot_metric(
     plt.figure(figsize=(14, 8))
     services_plotted = []
 
+    # Create numeric x-positions for proper ordering
+    x_positions = list(range(len(route_labels)))
+
     for service in services:
         if service not in AVAILABLE_SERVICES:
             continue
@@ -133,21 +136,25 @@ def plot_metric(
         config = AVAILABLE_SERVICES[service]
         values = pd.to_numeric(df[column], errors="coerce")
 
-        # Apply unit conversion and filter valid values
+        # Apply unit conversion
         if unit_conversion != 1:
             values = values / unit_conversion
 
-        valid_mask = values.notna() & (values > 0)
-        if not valid_mask.any():
+        # Filter out invalid values but keep x-positions aligned
+        plot_x = []
+        plot_y = []
+
+        for i, value in enumerate(values):
+            if pd.notna(value) and value > 0:
+                plot_x.append(x_positions[i])
+                plot_y.append(value)
+
+        if not plot_x:
             continue
 
-        valid_indices = [i for i in range(len(values)) if valid_mask.iloc[i]]
-        valid_labels = [route_labels[i] for i in valid_indices]
-        valid_values = values[valid_mask]
-
         plt.plot(
-            valid_labels,
-            valid_values,
+            plot_x,
+            plot_y,
             label=config["label"],
             marker=config["marker"],
             color=config["color"],
@@ -161,7 +168,8 @@ def plot_metric(
         print(f"⚠️ No valid data for {filename}")
         return False
 
-    plt.xticks(rotation=45, ha="right")
+    # Set x-axis with proper integer positions and labels
+    plt.xticks(x_positions, route_labels, rotation=45, ha="right")
     plt.ylabel(ylabel)
     plt.title(title)
     plt.legend(loc="best", fontsize=12)

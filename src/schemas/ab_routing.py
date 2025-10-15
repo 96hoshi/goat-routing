@@ -96,6 +96,21 @@ class IMotisPlan(BaseModel):
         title="Modes",
         description="Array of strings representing the desired modes of transport (default=TRANSIT).",
     )
+    # Performance optimization fields
+    maxItineraries: Optional[int] = Field(
+        default=None,
+        title="Max Itineraries",
+        description="Maximum number of itineraries to return. Reduces response size and processing time.",
+        ge=1,
+        le=20,
+    )
+    numItineraries: Optional[int] = Field(
+        default=None,
+        title="Number of Itineraries",
+        description="Alternative parameter name for limiting itineraries.",
+        ge=1,
+        le=20,
+    )
     ...
 
 

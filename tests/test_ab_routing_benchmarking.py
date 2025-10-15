@@ -1,21 +1,35 @@
 import pytest
 
+from tests.utils.benchmark_helpers import validate_service_response
 from tests.utils.commons import SERVICES, coordinates_list
 from tests.utils.models import ServiceMetrics
 
 
-def build_result_row(
-    service, origin, dest, avg_time, avg_cpu, avg_mem, response_size, rounds
+def build_performance_result_row(
+    service, origin, dest, benchmark_stats, result: ServiceMetrics, is_valid: bool
 ):
+    """Build result row with only the expected fieldnames for CSV output."""
     return {
+        # Standard fields expected by benchmark_reporter
         "service": service["name"],
         "origin": origin,
         "destination": dest,
-        "avg_time_ms": f"{avg_time:.3f}",
-        "avg_cpu_s": f"{avg_cpu:.4f}",
-        "avg_mem_mb_delta": f"{avg_mem:.4f}",
-        "avg_response_size_bytes": f"{response_size:.0f}",
-        "rounds": rounds,
+        "avg_time_ms": f"{benchmark_stats['mean'] * 1000:.3f}",
+        "avg_cpu_s": f"{result.cpu_s:.4f}",
+        "avg_mem_mb_delta": f"{result.mem_mb_delta:.4f}",
+        "avg_response_size_bytes": f"{result.response_size_bytes:.0f}",
+        "rounds": benchmark_stats["rounds"],
+        # Additional performance metrics (if supported by fieldnames)
+        "min_time_ms": f"{benchmark_stats['min'] * 1000:.3f}",
+        "max_time_ms": f"{benchmark_stats['max'] * 1000:.3f}",
+        "median_time_ms": f"{benchmark_stats['median'] * 1000:.3f}",
+        "stddev_time_ms": f"{benchmark_stats['stddev'] * 1000:.3f}",
+        "status_code": result.status_code,
+        "valid_response": is_valid,
+        # Performance ratios
+        "bytes_per_ms": f"{result.response_size_bytes / (benchmark_stats['mean'] * 1000):.2f}",
+        "cpu_efficiency": f"{result.cpu_s / benchmark_stats['mean']:.4f}",
+        "cv_percent": f"{(benchmark_stats['stddev'] / benchmark_stats['mean']) * 100:.2f}",
     }
 
 
@@ -25,10 +39,16 @@ def test_compare_services_benchmark(
     benchmark, coord, service, benchmark_reporter, response_writer
 ):
     """
-    Benchmarks a service, capturing timing, CPU, memory, response size and the response itself.
+    Enhanced performance benchmarking with detailed timing and resource metrics.
     """
     origin, destination = coord
-    payload = service["payload_builder"](origin, destination)
+
+    # Add transport mode for OTP if needed
+    kwargs = {"origin": origin, "destination": destination}
+    if service["name"] == "otp":
+        kwargs["transport_modes"] = ["TRANSIT", "WALK"]
+
+    payload = service["payload_builder"](**kwargs)
 
     result: ServiceMetrics = benchmark.pedantic(
         target=service["query_func"],
@@ -40,29 +60,24 @@ def test_compare_services_benchmark(
         },
         rounds=5,  # Run 5 times for stable stats
         iterations=1,
+        warmup_rounds=1,  # Add warmup for more accurate timing
     )
 
     # Assert that the request was successful
     assert result.status_code == 200, f"Request failed with status {result.status_code}"
 
-    # Get reliable timing from the benchmark framework
-    avg_time_ms = benchmark.stats["mean"] * 1000
+    # Validate response contains data (performance check)
+    is_valid = validate_service_response(result, service["name"])
+    assert is_valid, f"Service {service['name']} returned invalid response"
 
-    # Use our custom fixture to write the full JSON response
+    # Save response for debugging
     response_filename = f"{service['name']}_{origin}_{destination}.json".replace(
         ",", "_"
     )
     response_writer.save(result.response_data, response_filename)
 
-    # Append the aggregated result to our CSV reporter
-    row = build_result_row(
-        service,
-        origin,
-        destination,
-        avg_time=avg_time_ms,
-        avg_cpu=result.cpu_s,
-        avg_mem=result.mem_mb_delta,
-        response_size=result.response_size_bytes,
-        rounds=benchmark.stats["rounds"],
+    # Build performance-focused result row
+    row = build_performance_result_row(
+        service, origin, destination, benchmark.stats, result, is_valid
     )
     benchmark_reporter.append(row)

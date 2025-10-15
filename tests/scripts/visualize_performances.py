@@ -4,14 +4,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from tests.conftest import BENCHMARK_FILE, IMAGES_DIR
+from tests.utils.commons import get_available_services
 
-# Use same service configuration as visualize.py
-AVAILABLE_SERVICES = {
-    "motis": {"label": "MOTIS", "color": "#1f77b4", "marker": "o"},
-    "google": {"label": "Google Maps", "color": "#ff7f0e", "marker": "x"},
-    "valhalla": {"label": "Valhalla", "color": "#2ca02c", "marker": "s"},
-    "otp": {"label": "OTP", "color": "#d62728", "marker": "^"},
-}
+AVAILABLE_SERVICES = get_available_services()
 
 
 def load_data():
@@ -77,7 +72,7 @@ def create_performance_plots(df):
     ax2.grid(True, alpha=0.3)
 
     # Add value labels
-    for bar, val in zip(bars, avg_sizes):
+    for bar, val in zip(bars, avg_sizes, strict=False):
         ax2.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + max(avg_sizes) * 0.01,
@@ -103,7 +98,7 @@ def create_performance_plots(df):
     ax3.set_ylabel("CPU Time (s)")
     ax3.grid(True, alpha=0.3)
 
-    for bar, val in zip(bars, avg_cpu):
+    for bar, val in zip(bars, avg_cpu, strict=False):
         ax3.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + max(avg_cpu) * 0.01,
@@ -129,7 +124,7 @@ def create_performance_plots(df):
     ax4.set_ylabel("Memory (MB)")
     ax4.grid(True, alpha=0.3)
 
-    for bar, val in zip(bars, avg_mem):
+    for bar, val in zip(bars, avg_mem, strict=False):
         height_offset = abs(max(avg_mem)) * 0.1 if avg_mem else 0.1
         ax4.text(
             bar.get_x() + bar.get_width() / 2,
@@ -173,7 +168,6 @@ def main():
         plot_path = create_performance_plots(df)
         print_summary(df)
 
-        print("\n🎉 Analysis complete!")
         print(f"📈 Chart saved: {plot_path}")
 
     except FileNotFoundError as e:

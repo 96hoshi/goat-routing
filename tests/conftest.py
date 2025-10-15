@@ -1,26 +1,21 @@
 import csv
 import json
 import os
+from datetime import datetime, timedelta
 
 import pytest
 
-from tests.utils.commons import RESULT_DIR
+# Benchmark time: tomorrow at 08:00 UTC
+TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
+    hour=8, minute=0, second=0, microsecond=0
+).isoformat() + "Z"
 
-# Benchmark result file
+RESULT_DIR = "tests/results/"
+IMAGES_DIR = "tests/results/images/"
 RESULT_FILE = "benchmark_results.csv"
-# --- Configuration for Reporters ---
 RESPONSES_DIR = "tests/results/responses/"
+
 BENCHMARK_FILE = os.path.join(RESULT_DIR, RESULT_FILE)
-BENCHMARK_HEADERS = [
-    "service",
-    "origin",
-    "destination",
-    "avg_time_ms",
-    "avg_cpu_s",
-    "avg_mem_mb_delta",
-    "avg_response_size_bytes",
-    "rounds",
-]
 
 
 @pytest.fixture(scope="session")
@@ -36,7 +31,7 @@ def benchmark_reporter():
 
     print(f"\nWriting {len(results)} benchmark results to {BENCHMARK_FILE}...")
     with open(BENCHMARK_FILE, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=BENCHMARK_HEADERS)
+        writer = csv.DictWriter(f, fieldnames=results[0].keys())
         writer.writeheader()
         writer.writerows(results)
     print("Benchmark report written successfully.")

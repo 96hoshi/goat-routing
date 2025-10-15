@@ -4,7 +4,7 @@ Clean routing comparison with proper separation of transport vs driving modes.
 - Driving: Google (driving), Valhalla-NoGTFS (auto)
 """
 
-from tests.conftest import write_result
+from tests.conftest import write_response, write_result
 from tests.utils.commons import coordinates_list
 from tests.utils.models import RouteSummary
 from tests.utils.query_helpers import (
@@ -15,12 +15,19 @@ from tests.utils.query_helpers import (
     query_motis,
 )
 
+TRANSPORT_COMPARISON_CSV = "transport_comparison.csv"
+DRIVING_COMPARISON_CSV = "driving_comparison.csv"
+
 # Transport services (public transit)
 TRANSPORT_SERVICES = {
     "motis": {
         "query_func": query_motis,
         "extract_func": extract_motis_route_summary,
-        "query_params": {"transitModes": ["TRANSIT"]},
+        "query_params": {
+            "transitModes": ["TRANSIT"],
+            "maxItineraries": 6,
+            "detailedTransfers": False,
+        },
         "routes_path": ["result", "itineraries"],
     },
     "google": {
@@ -40,6 +47,8 @@ DRIVING_SERVICES = {
         "routes_path": ["routes"],
     },
 }
+
+# EXCLUDE otp for now, it is haldelen in test_otp_routing.py
 
 
 def query_service_for_mode(service_name, service_config, origin, destination):
@@ -148,7 +157,7 @@ def get_headers_for_services(services, mode):
 
 def test_transport_routing():
     """Test transport/transit routing services."""
-    filename = "transport_comparison.csv"
+    filename = TRANSPORT_COMPARISON_CSV
     mode = "transport"
 
     headers = ["origin", "destination", "routing_mode"] + get_headers_for_services(
@@ -175,6 +184,7 @@ def test_transport_routing():
                 service_name, service_config, result, size, mode
             )
             row.update(service_data)
+            write_response(result, f"{service_name}_{i}_{mode}.json")  # type: ignore
 
         write_result(row, filename=filename, headers=headers)
 
@@ -184,7 +194,7 @@ def test_transport_routing():
 
 def test_driving_routing():
     """Test driving/car routing services."""
-    filename = "driving_comparison.csv"
+    filename = DRIVING_COMPARISON_CSV
     mode = "driving"
 
     headers = ["origin", "destination", "routing_mode"] + get_headers_for_services(
