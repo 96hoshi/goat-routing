@@ -1,5 +1,6 @@
+import logging
 import math
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import httpx
 import polyline
@@ -65,73 +66,207 @@ def query_motis(origin, destination, time=TIME_BENCH, **kwargs) -> QueryResult:
         return QueryResult.success_result(data, response_size)
     except Exception as e:
         error_msg = f"Error calling AB-routing for {origin} -> {destination}: {e}"
-        print(error_msg)
+        return QueryResult.error_result(error_msg)
+
+
+def query_motis_by_payload(payload: Dict[str, str]) -> QueryResult:
+    """Query MOTIS API and return standardized result."""
+    try:
+        response = client.post(settings.MOTIS_ROUTE, json=payload)
+        response.raise_for_status()
+        response_size = len(response.content)
+        data = response.json()
+        http_status = response.status_code  # Get the HTTP response code
+
+        return QueryResult.success_result(data, response_size, http_status)
+    except Exception as e:
+        error_msg = f"Error: {e}"
         return QueryResult.error_result(error_msg)
 
 
 def extract_motis_route_summary(result: Dict[str, Any]) -> RouteSummary:
     """Extract route summary from MOTIS response data."""
-    routes = result.get("result", {}).get("itineraries", [])
-    direct_routes = result.get("result", {}).get("direct", [])
+    # Early validation
+    if not result or "result" not in result:
+        logging.warning("Invalid MOTIS response structure: missing 'result'")
+        return RouteSummary.empty_summary()
 
+    result_data = result["result"]
+    routes = result_data.get("itineraries", [])
+    direct_routes = result_data.get("direct", [])
+
+    # Select the first available route
+    route = None
     if routes:
         route = routes[0]
-    else:
-        # Try direct route if no itineraries
-        if not direct_routes:
-            print("No route found:", result)
-            return RouteSummary.empty_summary()
+        route_source = "itineraries"
+    elif direct_routes:
         route = direct_routes[0]
+        route_source = "direct"
+    else:
+        logging.info("No routes found in MOTIS response")
+        return RouteSummary.empty_summary()
 
-    # Total duration
-    duration = route.get(
-        "duration", sum(leg.get("duration", 0) for leg in route.get("legs", []))
-    )
+    # Extract duration with fallback calculation
+    duration = route.get("duration")
+    if duration is None:
+        # Calculate from legs if duration not provided
+        legs = route.get("legs", [])
+        duration = sum(leg.get("duration", 0) for leg in legs)
+        if duration == 0:
+            logging.warning(f"No duration found in {route_source} route")
 
-    # Total distance
+    # Extract distance with improved error handling
     distance = 0
-    for leg in route.get("legs", []):
+    polyline_cache = {}
+    legs = route.get("legs", [])
+
+    for i, leg in enumerate(legs):
+        leg_distance = 0
+
+        # Method 1: Direct distance field
         if "distance" in leg:
-            distance += leg["distance"]
+            leg_distance = leg["distance"]
+
+        # Method 2: Decode polyline geometry
         elif "legGeometry" in leg and "points" in leg["legGeometry"]:
-            pts = polyline.decode(
-                leg["legGeometry"]["points"], leg["legGeometry"].get("precision", 5)
-            )
-            distance += polyline_distance(pts)
+            try:
+                points_str = leg["legGeometry"]["points"]
+                precision = leg["legGeometry"].get("precision", 5)
+                points_key = (points_str, precision)
+
+                if points_key in polyline_cache:
+                    pts = polyline_cache[points_key]
+                else:
+                    pts = polyline.decode(points_str, precision)
+                    polyline_cache[points_key] = pts
+
+                if len(pts) > 1:  # Need at least 2 points for distance
+                    leg_distance = polyline_distance(pts)
+                else:
+                    logging.warning(
+                        f"Leg {i}: Polyline has insufficient points ({len(pts)})"
+                    )
+
+            except Exception as e:
+                logging.warning(f"Leg {i}: Failed to decode polyline: {e}")
+                # Fall back to haversine calculation
+                if "from" in leg and "to" in leg:
+                    leg_distance = _calculate_haversine_distance(leg)
+
+        # Method 3: Haversine calculation from coordinates
         elif "from" in leg and "to" in leg:
-            distance += haversine(
-                leg["from"]["lat"],
-                leg["from"]["lon"],
-                leg["to"]["lat"],
-                leg["to"]["lon"],
+            leg_distance = _calculate_haversine_distance(leg)
+
+        # Method 4: No distance information available
+        else:
+            logging.warning(
+                f"Leg {i}: Cannot determine distance - no geometry or coordinates"
             )
-        else:
-            print(f"Warning: No distance found for leg: {leg}")
+            continue
 
-    # Modes and vehicle lines
-    modes, vehicle_lines = [], []
-    for leg in route.get("legs", []):
-        if "mode" in leg:
-            modes.append(leg["mode"])
-        elif "transport_mode" in leg:
-            modes.append(leg["transport_mode"])
-        elif "transports" in leg:
-            for t in leg["transports"]:
-                modes.append(t.get("mode", "unknown"))
-        else:
-            modes.append("unknown")
+        distance += leg_distance
 
-        route_name = leg.get("routeShortName")
-        if route_name:
-            vehicle_lines.append(route_name)
+    # Extract modes and vehicle lines with improved parsing
+    modes, vehicle_lines = _extract_transport_info(route.get("legs", []))
+
+    # Determine number of routes
+    num_routes = len(routes) if routes else len(direct_routes)
 
     return RouteSummary(
         duration_s=duration,
-        distance_m=distance,
-        num_routes=len(routes) if routes else len(direct_routes),
+        distance_m=int(distance),
+        num_routes=num_routes,
         modes=modes,
         vehicle_lines=vehicle_lines,
     )
+
+
+def _calculate_haversine_distance(leg: Dict[str, Any]) -> float:
+    """Calculate distance between two points using haversine formula."""
+    try:
+        from_coord = leg["from"]
+        to_coord = leg["to"]
+
+        # Validate coordinates
+        from_lat = from_coord.get("lat")
+        from_lon = from_coord.get("lon")
+        to_lat = to_coord.get("lat")
+        to_lon = to_coord.get("lon")
+
+        if None in [from_lat, from_lon, to_lat, to_lon]:
+            logging.warning("Invalid coordinates in leg")
+            return 0.0
+
+        return haversine(from_lat, from_lon, to_lat, to_lon)
+
+    except (KeyError, TypeError) as e:
+        logging.warning(f"Error calculating haversine distance: {e}")
+        return 0.0
+
+
+def _extract_transport_info(legs: list) -> tuple[list, list]:
+    """Extract transportation modes and vehicle lines from route legs."""
+    modes = []
+    vehicle_lines = []
+
+    for i, leg in enumerate(legs):
+        # Extract mode with multiple fallbacks
+        mode = None
+        if "mode" in leg:
+            mode = leg["mode"]
+        elif "transport_mode" in leg:
+            mode = leg["transport_mode"]
+        elif "transports" in leg:
+            # Handle multiple transports in a leg
+            for transport in leg["transports"]:
+                transport_mode = transport.get("mode", "unknown")
+                if transport_mode not in modes:
+                    modes.append(transport_mode)
+
+        if mode:
+            modes.append(mode)
+        elif mode is None:
+            logging.debug(f"Leg {i}: No transport mode found")
+            modes.append("unknown")
+
+        # Extract vehicle line information
+        route_info = _extract_route_info(leg)
+        if route_info:
+            vehicle_lines.extend(route_info)
+
+    return modes, vehicle_lines
+
+
+def _extract_route_info(leg: Dict[str, Any]) -> list:
+    """Extract route/line information from a single leg."""
+    route_names = []
+
+    # Check various possible fields for route information
+    route_fields = [
+        "routeShortName",
+        "route_short_name",
+        "shortName",
+        "lineName",
+        "line_name",
+    ]
+
+    for field in route_fields:
+        if field in leg and leg[field]:
+            route_name = str(leg[field]).strip()
+            if route_name and route_name not in route_names:
+                route_names.append(route_name)
+
+    # Check nested transport information
+    if "transports" in leg:
+        for transport in leg["transports"]:
+            for field in route_fields:
+                if field in transport and transport[field]:
+                    route_name = str(transport[field]).strip()
+                    if route_name and route_name not in route_names:
+                        route_names.append(route_name)
+
+    return route_names
 
 
 # --------------------------- Google ---------------------- #
@@ -246,7 +381,7 @@ def query_valhalla(
     costing: str = "multimodal",
     endpoint: Optional[str] = None,
     **kwargs,
-) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
+) -> QueryResult:
     """Query Valhalla API and return standardized result."""
     payload = valhalla_payload(
         origin, destination, costing=costing, time=TIME_BENCH, **kwargs
@@ -265,14 +400,11 @@ def query_valhalla(
             response.raise_for_status()
             response_size = len(response.content)
             data = response.json()
-            return data, response_size
-
-    except httpx.HTTPError as e:
-        print(f"HTTP Error occurred while calling Valhalla API: {e}")
-        return None, None
+            return QueryResult.success_result(data, response_size)
     except Exception as e:
-        print(f"Error calling Valhalla for {origin} -> {destination}: {e}")
-        return None, None
+        error_msg = f"Error calling Valhalla API for {origin} -> {destination}: {e}"
+        print(error_msg)
+        return QueryResult.error_result(error_msg)
 
 
 def extract_valhalla_route_summary(result: Dict[str, Any]) -> RouteSummary:

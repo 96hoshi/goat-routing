@@ -1,3 +1,9 @@
+"""
+Create performance comparison plots from benchmark CSV.
+Generates box plots for response times and bar charts for response size,
+CPU usage, and memory usage across different routing services.
+"""
+
 import os
 
 import matplotlib.pyplot as plt
@@ -7,6 +13,7 @@ from tests.conftest import BENCHMARK_FILE, IMAGES_DIR
 from tests.utils.commons import get_available_services
 
 AVAILABLE_SERVICES = get_available_services()
+PERFORMANCE_IMG = "performance_comparison.png"
 
 
 def load_data():
@@ -136,7 +143,7 @@ def create_performance_plots(df):
 
     plt.tight_layout()
 
-    plot_path = os.path.join(IMAGES_DIR, "performance_comparison.png")
+    plot_path = os.path.join(IMAGES_DIR, PERFORMANCE_IMG)
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     plt.close()
 

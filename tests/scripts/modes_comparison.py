@@ -15,6 +15,10 @@ from tests.utils.query_helpers import (
     query_motis,
 )
 
+# Configuration flags to enable/disable modes for comparison
+DRIVE = True
+TRANSPORT = True
+
 TRANSPORT_COMPARISON_CSV = "transport_comparison.csv"
 DRIVING_COMPARISON_CSV = "driving_comparison.csv"
 
@@ -210,7 +214,6 @@ def test_driving_routing():
             "routing_mode": "Driving",
         }
 
-        # Query all driving services
         for service_name, service_config in DRIVING_SERVICES.items():
             result, size = query_service_for_mode(
                 service_name, service_config, origin, destination
@@ -226,23 +229,18 @@ def test_driving_routing():
     return filename
 
 
-def compare_all_routing_modes(verbose=False):
+def compare_routing_modes():
     """Compare both transport and driving routing modes."""
-    print("🗺️ Starting routing modes comparison...")
-    print("=" * 60)
 
     # Test transport routing
-    transport_file = test_transport_routing()
-
-    # Test driving routing
-    driving_file = test_driving_routing()
-
-    if verbose:
-        print("\n📊 Results:")
+    if TRANSPORT:
+        transport_file = test_transport_routing()
         print(f"   Transport: /app/tests/results/{transport_file}")
+
+    if DRIVE:
+        driving_file = test_driving_routing()
         print(f"   Driving: /app/tests/results/{driving_file}")
 
 
 if __name__ == "__main__":
-    # Test both modes
-    compare_all_routing_modes(verbose=True)
+    compare_routing_modes()
