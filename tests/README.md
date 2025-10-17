@@ -71,9 +71,18 @@ Run all tests and generate reports automatically:
 
 ```sh
 # Make executable and run
+<<<<<<< HEAD
 chmod +x run_tests.sh
 ./run_tests.sh
 
+=======
+chmod +x run_all_tests_and_generate_reports.sh
+./run_all_tests_and_generate_reports.sh
+
+# Or use Python version
+python run_comprehensive_tests.py
+```
+>>>>>>> a21fa2d0b9b70e4331a83841622cbdb8e70b3d63
 
 This script will:
 1. Run all test suites (plausibility, integration, MOTIS)
@@ -91,7 +100,11 @@ This script will:
 - **Transport comparison:** `tests/results/transport_routes_comparison.csv`
 - **Driving comparison:** `tests/results/driving_routes_comparison.csv`
 - **Response files:** `tests/results/responses/`
+<<<<<<< HEAD
 - **Visualization plots:** `tests/results/images/*.png`
+=======
+- **Visualization plots:** `tests/images/*.png`
+>>>>>>> a21fa2d0b9b70e4331a83841622cbdb8e70b3d63
 - **Execution report:** `tests/results/test_execution_report.md`
 
 ### Compare Benchmarks
@@ -104,7 +117,17 @@ pytest-benchmark compare .benchmarks/<run>.json
 
 ```sh
 # List all generated plots
+<<<<<<< HEAD
 ls -la tests/results/images/
+=======
+ls -la tests/images/
+
+# Open specific plots in browser (dev container)
+"$BROWSER" tests/images/transport_duration_comparison_line.png
+"$BROWSER" tests/images/driving_distance_comparison_scatter.png
+"$BROWSER" tests/images/performance_comparison.png
+```
+>>>>>>> a21fa2d0b9b70e4331a83841622cbdb8e70b3d63
 
 ## Comparing and Visualizing Routing Services
 
@@ -203,6 +226,10 @@ python tests/scripts/visualize.py line
 
 # View results
 ls tests/results/
+<<<<<<< HEAD
+=======
+ls tests/images/
+>>>>>>> a21fa2d0b9b70e4331a83841622cbdb8e70b3d63
 "$BROWSER" tests/results/test_execution_report.md
 ```
 
