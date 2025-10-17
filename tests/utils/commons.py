@@ -1,17 +1,31 @@
+import os
+
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.core.config import settings
 from src.endpoints.v2.routing import router
-from tests.coords.coords import mannheim_coordinates
-from tests.utils.payload_builders import google_payload, motis_payload, otp_payload
+from tests.coords.lists import (
+    aachen_coordinates,
+    germany_coordinates,
+    mannheim_coordinates,
+)
+from tests.utils.payload_builders import google_payload, motis_payload
 
 from .benchmark_helpers import (
     generic_query_service,
     google_query_service,
-    otp_query_service,
 )
+
+# Environment-based coordinate selection
+COORDINATE_MAP = {
+    "germany": germany_coordinates,
+    "mannheim": mannheim_coordinates,
+    "aachen": aachen_coordinates,
+    "test": mannheim_coordinates[:3],
+}
+
 
 # FastAPI test client setup
 app = FastAPI()
@@ -21,8 +35,20 @@ client = TestClient(app)
 # httpx client for external APIs
 external_client = httpx.Client()
 
-# Test coordinates list (latitude,longitude)
-coordinates_list = mannheim_coordinates
+
+def get_test_coordinates():
+    """Get coordinates based on environment setting."""
+    coord_type = os.getenv("TEST_COORDS", "germany")
+
+    if coord_type not in COORDINATE_MAP:
+        print(f"⚠️ Unknown TEST_COORDS '{coord_type}', using 'germany'")
+        coord_type = "germany"
+
+    coords = COORDINATE_MAP[coord_type]
+    return coords
+
+
+coordinates_list = get_test_coordinates()
 
 # ----------------- Define routing services configurations ----------------- #
 SERVICES = [
@@ -48,17 +74,17 @@ SERVICES = [
         "query_func": google_query_service,
         "method": "GET",
     },
-    {
-        "name": "otp",
-        "label": "OTP",
-        "color": "#d62728",
-        "marker": "^",
-        "client": external_client,
-        "endpoint": str(settings.OPEN_TRIP_PLANNER_URL),
-        "payload_builder": otp_payload,
-        "query_func": otp_query_service,
-        "method": "POST",
-    },
+    # {
+    #     "name": "otp",
+    #     "label": "OTP",
+    #     "color": "#d62728",
+    #     "marker": "^",
+    #     "client": external_client,
+    #     "endpoint": str(settings.OPEN_TRIP_PLANNER_URL),
+    #     "payload_builder": otp_payload,
+    #     "query_func": otp_query_service,
+    #     "method": "POST",
+    # },
     # {
     #     "name": "valhalla",
     #     "label": "Valhalla",
@@ -73,7 +99,6 @@ SERVICES = [
 ]
 
 
-# Helper function to get service by name
 def get_service_by_name(name):
     """Get service configuration by name."""
     return next((s for s in SERVICES if s["name"] == name), None)

@@ -11,19 +11,21 @@ def motis_payload(
     origin: str,
     destination: str,
     time: str = TIME_BENCH,
-    detailed_transfers: str = "false",
+    detailed_transfers: bool = False,
+    maxItineraries: int = 6,
     **kwargs,
 ) -> Dict[str, str]:
     """
     Build a payload for the Motis routing API.
     """
+    detailed = "true" if detailed_transfers else "false"
 
     return {
         "fromPlace": origin,
         "toPlace": destination,
         "time": time,
-        "detailedTransfers": detailed_transfers,
-        "maxItineraries": "6",  # Request up to 6 itineraries all is default
+        "detailedTransfers": detailed,
+        "maxItineraries": str(maxItineraries),
         **kwargs,
     }
 
@@ -34,17 +36,21 @@ def google_payload(
     mode: str = "transit",
     time: str = TIME_BENCH,
     api_key: str = settings.GOOGLE_API_KEY,
+    alternatives: bool = True,
 ) -> Dict[str, Any]:
     """Build payload for Google Directions API."""
+
     dt = datetime.fromisoformat(time.replace("Z", "+00:00"))
     departure_timestamp = int(dt.timestamp())
+    alternatives_str = "true" if alternatives else "false"
+
     return {
         "origin": origin,
         "destination": destination,
         "mode": mode,
         "departure_time": departure_timestamp,
         "key": api_key,
-        "alternatives": "true",  # default is 1
+        "alternatives": alternatives_str,  # default is 1
     }
 
 
@@ -54,7 +60,7 @@ def valhalla_payload(
     """Build payload for Valhalla routing API.
     costing values: "multimodal", "auto", "bicycle", "pedestrian", "bus"
     """
-    # Parse coordinates from "lat,lon" format
+
     origin_lat, origin_lon = map(float, origin.split(","))
     dest_lat, dest_lon = map(float, destination.split(","))
 

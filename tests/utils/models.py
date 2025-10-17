@@ -11,10 +11,18 @@ class QueryResult:
     data: Optional[Dict[str, Any]]
     response_size: int
     error_message: Optional[str] = None
+    status_code: Optional[int] = None
 
     @classmethod
-    def success_result(cls, data: Dict[str, Any], response_size: int):
-        return cls(success=True, data=data, response_size=response_size)
+    def success_result(
+        cls, data: Dict[str, Any], response_size: int, status_code: int = 200
+    ):
+        return cls(
+            success=True,
+            data=data,
+            response_size=response_size,
+            status_code=status_code,
+        )
 
     @classmethod
     def error_result(cls, error_message: str):
@@ -53,4 +61,13 @@ class RouteSummary:
             num_routes=0,
             modes=[],
             vehicle_lines=[],
+        )
+
+    def is_empty(self) -> bool:
+        return (
+            self.duration_s == 0
+            and self.distance_m == 0.0
+            and self.num_routes == 0
+            and len(self.modes) == 0
+            and len(self.vehicle_lines) == 0
         )

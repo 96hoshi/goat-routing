@@ -33,7 +33,7 @@ echo "Using transfer map file: $TRANSFERS_FILE"
 ./motis server -d data/
 
 
-# Maachen
+# Aachen
 # set -e
 
 # TARGET="linux-amd64"
