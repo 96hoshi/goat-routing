@@ -4,6 +4,8 @@ Clean routing comparison with proper separation of transport vs driving modes.
 - Driving: Google (driving), Valhalla-NoGTFS (auto)
 """
 
+from datetime import datetime
+
 from tests.conftest import write_response, write_result
 from tests.utils.commons import coordinates_list
 from tests.utils.models import RouteSummary
@@ -161,7 +163,11 @@ def get_headers_for_services(services, mode):
 
 def test_transport_routing():
     """Test transport/transit routing services."""
-    filename = TRANSPORT_COMPARISON_CSV
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = TRANSPORT_COMPARISON_CSV.replace(".csv", f"_{timestamp}.csv")
+
+    # --- The rest of the function is UNCHANGED ---
     mode = "transport"
 
     headers = ["origin", "destination", "routing_mode"] + get_headers_for_services(
@@ -198,7 +204,8 @@ def test_transport_routing():
 
 def test_driving_routing():
     """Test driving/car routing services."""
-    filename = DRIVING_COMPARISON_CSV
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = DRIVING_COMPARISON_CSV.replace(".csv", f"_{timestamp}.csv")
     mode = "driving"
 
     headers = ["origin", "destination", "routing_mode"] + get_headers_for_services(

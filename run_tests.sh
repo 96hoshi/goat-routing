@@ -73,17 +73,13 @@ main() {
     # Step: Generate visualizations 
     print_step "Generating visualization plots..."
     
-    # Step: Generate grouped bar plots and line plots
-    run_command "Generating grouped bar plots" \
-        "python tests/scripts/visualize.py bar_grouped,line"
+    # Step: Generate routing comparisons
+    run_command "Generating routing comparisons" \
+        "python tests/scripts/visualize_routing_comparison.py"
 
     # Step: Visualize benchmark results
     run_command "Visualizing benchmark results" \
         "python tests/scripts/visualize_benchmark.py"
-
-    # Step: Visualize enhanced benchmark results
-    run_command "Visualizing enhanced benchmark results" \
-        "python tests/scripts/visualize_benchmark_enhanced.py"
     
     # Step: Generate comprehensive report
     generate_report

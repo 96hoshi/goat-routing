@@ -18,3 +18,12 @@ __pycache__/
 /geodata
 /tests/results
 /tests/.benchmarks
+/tests/.reports
+/tests/.logs
+/tests/.temp
+/logs
+/tmp
+/data
+/outputs
+/reports
+/benchmarks

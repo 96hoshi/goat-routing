@@ -17,6 +17,7 @@ services:
       - .env
     volumes:
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "6000:6000"
       - "8000:8000"

@@ -1,6 +1,6 @@
 # tests/utils/models.py
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 
 @dataclass
@@ -29,6 +29,19 @@ class QueryResult:
         return cls(
             success=False, data=None, response_size=0, error_message=error_message
         )
+
+
+# A new result class to hold all metrics
+class BenchmarkResult(NamedTuple):
+    latency_ms: float
+    response_size_bytes: int
+    status_code: int
+    container_name: str
+    container_cpu_usage_total_s: float  # Total CPU seconds used by container
+    container_mem_peak_mb: float  # Peak memory usage of container
+    container_net_rx_bytes: int  # Network Received
+    container_net_tx_bytes: int  # Network Transmitted
+    response_data: Dict | str
 
 
 @dataclass
