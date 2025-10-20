@@ -1,186 +1,251 @@
 """
-Create performance comparison plots from benchmark CSV.
-Generates box plots for response times and bar charts for response size,
-CPU usage, and memory usage across different routing services.
+Create comprehensive performance comparison plots by intelligently merging
+container (server-side) and api (client-side) benchmark results, using a
+dynamic configuration loaded from the test suite.
 """
 
+import glob
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
 
-from tests.conftest import BENCHMARK_FILE, IMAGES_DIR
-from tests.utils.commons import get_available_services
+from tests.conftest import IMAGES_DIR, RESULT_DIR
+from tests.utils.commons import get_service_config
 
-AVAILABLE_SERVICES = get_available_services()
-PERFORMANCE_IMG = "performance_comparison.png"
+# --- Configuration ---
+DETAILED_PERFORMANCE_DIR = os.path.join(IMAGES_DIR, "detailed_performance")
+
+# A simple map for service colors and labels
+SERVICE_CONFIG = get_service_config()
+
+# Create a color palette dictionary for seaborn from the dynamic config
+COLOR_PALETTE = {service: config["color"] for service, config in SERVICE_CONFIG.items()}
+
+# Set style for better visualizations
+plt.style.use(
+    "seaborn-v0_8-whitegrid"
+    if "seaborn-v0_8-whitegrid" in plt.style.available
+    else "default"
+)
+
+# --- DATA LOADING AND PREPARATION ---
 
 
-def load_data():
-    """Load benchmark CSV data."""
-    if not os.path.exists(BENCHMARK_FILE):
-        raise FileNotFoundError(f"Benchmark file not found: {BENCHMARK_FILE}")
-
-    df = pd.read_csv(BENCHMARK_FILE)
-    print(f"📊 Loaded {len(df)} benchmark records")
-    print(f"   Services: {df['service'].unique()}")
-    return df
+def find_latest_benchmark_file(pattern: str) -> str | None:
+    """Finds the most recent file in the result directory matching a pattern."""
+    search_path = os.path.join(RESULT_DIR, pattern)
+    files = glob.glob(search_path)
+    return max(files, key=os.path.getctime) if files else None
 
 
-def create_performance_plots(df):
-    """Create performance comparison plots."""
-    os.makedirs(IMAGES_DIR, exist_ok=True)
+def load_and_prepare_data():
+    """Load, standardize, and merge benchmark CSVs into a single DataFrame."""
+    container_file = find_latest_benchmark_file("container_benchmarks_*.csv")
+    api_file = find_latest_benchmark_file("api_benchmarks_*.csv")
 
-    services = df["service"].unique()
+    if not container_file and not api_file:
+        raise FileNotFoundError("No benchmark files found in 'reports/' directory.")
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle(
-        "Routing Services Performance Comparison", fontsize=14, fontweight="bold"
+    df_container = pd.read_csv(container_file) if container_file else pd.DataFrame()
+    df_api = pd.read_csv(api_file) if api_file else pd.DataFrame()
+
+    all_dfs = []
+    if not df_container.empty:
+        print(f"📊 Loaded {len(df_container)} container benchmark records.")
+        df_container["cost_type"] = "Server-Side"
+        df_container.rename(
+            columns={"container_cpu_s": "cpu_s", "container_mem_peak_mb": "memory_mb"},
+            inplace=True,
+        )
+        all_dfs.append(df_container)
+
+    if not df_api.empty:
+        print(f"📊 Loaded {len(df_api)} API benchmark records.")
+        df_api["cost_type"] = "Client-Side"
+        df_api.rename(
+            columns={"client_cpu_s": "cpu_s", "client_mem_mb_delta": "memory_mb"},
+            inplace=True,
+        )
+        all_dfs.append(df_api)
+
+    df_combined = pd.concat(all_dfs, ignore_index=True)
+    df_combined["throughput_rps"] = 1000 / df_combined["avg_time_ms"]
+    return df_combined
+
+
+# --- INDIVIDUAL PLOTTING FUNCTIONS ---
+
+
+def get_label(service_name):
+    """Safely get a service label from the config."""
+    return SERVICE_CONFIG.get(service_name, {"label": service_name.upper()})["label"]
+
+
+def create_response_time_plot(df, ax):
+    """Plots response time distribution."""
+    sns.boxplot(
+        x="service",
+        y="avg_time_ms",
+        data=df,
+        ax=ax,
+        palette=COLOR_PALETTE,
+        hue="service",
+        legend=False,
     )
+    ax.set_xticklabels([get_label(s.get_text()) for s in ax.get_xticklabels()])
+    ax.set_title("Response Time Distribution")
+    ax.set_xlabel(None)
+    ax.set_ylabel("Time (ms)")
 
-    # 1. Response Time
-    ax1 = axes[0, 0]
-    for service in services:
-        if service in AVAILABLE_SERVICES:
-            data = df[df["service"] == service]["avg_time_ms"]
-            config = AVAILABLE_SERVICES[service]
-            ax1.boxplot(
-                [data],
-                positions=[list(services).index(service)],
-                patch_artist=True,
-                boxprops={"facecolor": config["color"], "alpha": 0.7},
-            )
 
-    ax1.set_xticks(range(len(services)))
-    ax1.set_xticklabels(
-        [AVAILABLE_SERVICES.get(s, {"label": s.upper()})["label"] for s in services]
+def create_throughput_plot(df, ax):
+    """Plots average throughput."""
+    sns.barplot(
+        x="service",
+        y="throughput_rps",
+        data=df,
+        ax=ax,
+        palette=COLOR_PALETTE,
+        hue="service",
+        legend=False,
+        estimator=np.mean,
     )
-    ax1.set_title("Response Time Distribution")
-    ax1.set_ylabel("Time (ms)")
-    ax1.grid(True, alpha=0.3)
-
-    # 2. Response Size
-    ax2 = axes[0, 1]
-    avg_sizes = []
-    colors = []
-    labels = []
-
-    for service in services:
-        if service in AVAILABLE_SERVICES:
-            avg_sizes.append(
-                df[df["service"] == service]["avg_response_size_bytes"].mean() / 1024
-            )
-            colors.append(AVAILABLE_SERVICES[service]["color"])
-            labels.append(AVAILABLE_SERVICES[service]["label"])
-
-    bars = ax2.bar(labels, avg_sizes, color=colors, alpha=0.7)
-    ax2.set_title("Average Response Size")
-    ax2.set_ylabel("Size (KB)")
-    ax2.grid(True, alpha=0.3)
-
-    # Add value labels
-    for bar, val in zip(bars, avg_sizes, strict=False):
-        ax2.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + max(avg_sizes) * 0.01,
-            f"{val:.1f}",
-            ha="center",
-            va="bottom",
-        )
-
-    # 3. CPU Usage
-    ax3 = axes[1, 0]
-    avg_cpu = []
-    colors = []
-    labels = []
-
-    for service in services:
-        if service in AVAILABLE_SERVICES:
-            avg_cpu.append(df[df["service"] == service]["avg_cpu_s"].mean())
-            colors.append(AVAILABLE_SERVICES[service]["color"])
-            labels.append(AVAILABLE_SERVICES[service]["label"])
-
-    bars = ax3.bar(labels, avg_cpu, color=colors, alpha=0.7)
-    ax3.set_title("Average CPU Usage")
-    ax3.set_ylabel("CPU Time (s)")
-    ax3.grid(True, alpha=0.3)
-
-    for bar, val in zip(bars, avg_cpu, strict=False):
-        ax3.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + max(avg_cpu) * 0.01,
-            f"{val:.3f}",
-            ha="center",
-            va="bottom",
-        )
-
-    # 4. Memory Usage
-    ax4 = axes[1, 1]
-    avg_mem = []
-    colors = []
-    labels = []
-
-    for service in services:
-        if service in AVAILABLE_SERVICES:
-            avg_mem.append(df[df["service"] == service]["avg_mem_mb_delta"].mean())
-            colors.append(AVAILABLE_SERVICES[service]["color"])
-            labels.append(AVAILABLE_SERVICES[service]["label"])
-
-    bars = ax4.bar(labels, avg_mem, color=colors, alpha=0.7)
-    ax4.set_title("Average Memory Delta")
-    ax4.set_ylabel("Memory (MB)")
-    ax4.grid(True, alpha=0.3)
-
-    for bar, val in zip(bars, avg_mem, strict=False):
-        height_offset = abs(max(avg_mem)) * 0.1 if avg_mem else 0.1
-        ax4.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + height_offset,
-            f"{val:.2f}",
-            ha="center",
-            va="bottom",
-        )
-
-    plt.tight_layout()
-
-    plot_path = os.path.join(IMAGES_DIR, PERFORMANCE_IMG)
-    plt.savefig(plot_path, dpi=150, bbox_inches="tight")
-    plt.close()
-
-    print(f"✅ Performance comparison saved: {plot_path}")
-    return plot_path
+    ax.set_xticklabels([get_label(s.get_text()) for s in ax.get_xticklabels()])
+    ax.set_title("Average Throughput (Requests/Sec)")
+    ax.set_xlabel(None)
+    ax.set_ylabel("RPS (Higher is Better)")
 
 
-def print_summary(df):
-    """Print simple performance summary."""
-    print("\n📊 PERFORMANCE SUMMARY")
-    print("=" * 50)
+def create_cpu_plot(df, ax):
+    """Plots CPU usage, differentiating server vs. client cost."""
+    sns.barplot(
+        x="service",
+        y="cpu_s",
+        hue="cost_type",
+        data=df,
+        ax=ax,
+        palette="viridis",
+        estimator=np.mean,
+    )
+    ax.set_xticklabels([get_label(s.get_text()) for s in ax.get_xticklabels()])
+    ax.set_title("CPU Usage: Server vs. Client Cost")
+    ax.set_xlabel(None)
+    ax.set_ylabel("CPU Time (s, log scale)")
+    ax.set_yscale("log")
+    ax.legend(title="Cost Type")
 
-    for service in df["service"].unique():
-        if service in AVAILABLE_SERVICES:
-            data = df[df["service"] == service]
-            service_label = AVAILABLE_SERVICES[service]["label"]
-            print(f"\n{service_label}:")
-            print(f"  Routes tested: {len(data)}")
-            print(f"  Avg time: {data['avg_time_ms'].mean():.1f} ms")
-            print(f"  Avg CPU: {data['avg_cpu_s'].mean():.3f} s")
-            print(f"  Avg size: {data['avg_response_size_bytes'].mean()/1024:.1f} KB")
-            print(f"  Memory delta: {data['avg_mem_mb_delta'].mean():.2f} MB")
+
+def create_memory_plot(df, ax):
+    """Plots memory usage, differentiating server vs. client cost."""
+    sns.barplot(
+        x="service",
+        y="memory_mb",
+        hue="cost_type",
+        data=df,
+        ax=ax,
+        palette="magma",
+        estimator=np.mean,
+    )
+    ax.set_xticklabels([get_label(s.get_text()) for s in ax.get_xticklabels()])
+    ax.set_title("Memory Usage: Peak Server vs. Client Delta")
+    ax.set_xlabel(None)
+    ax.set_ylabel("Memory (MB, log scale)")
+    ax.set_yscale("log")
+    ax.legend(title="Cost Type")
+
+
+def create_efficiency_scatter_plot(df, ax):
+    """Creates a scatter plot of CPU vs Memory, using custom markers."""
+    ax.set_title("Resource Efficiency (CPU vs. Memory)")
+    sns.scatterplot(
+        data=df,
+        x="cpu_s",
+        y="memory_mb",
+        hue="service",
+        style="cost_type",
+        palette=COLOR_PALETTE,
+        ax=ax,
+        s=100,  # size of markers
+        alpha=0.8,
+    )
+    ax.set_xlabel("CPU Time (s, log scale)")
+    ax.set_ylabel("Memory (MB, log scale)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.grid(True, which="both", ls="--", linewidth=0.5)
+
+
+# --- MAIN DASHBOARD AND SAVING LOGIC ---
+
+
+def save_plot(fig, ax, plot_func, df, filename):
+    """Helper to save a single plot."""
+    plot_func(df, ax)
+    fig.tight_layout()  # Simple layout for single plots
+    plot_path = os.path.join(DETAILED_PERFORMANCE_DIR, filename)
+    fig.savefig(plot_path, dpi=150)
+    plt.close(fig)
 
 
 def main():
-    """Create performance comparison plots from benchmark CSV."""
+    """Load, analyze, and visualize benchmark data."""
     try:
-        df = load_data()
-        plot_path = create_performance_plots(df)
-        print_summary(df)
+        print("🚀 Starting benchmark analysis...")
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        os.makedirs(DETAILED_PERFORMANCE_DIR, exist_ok=True)
 
-        print(f"📈 Chart saved: {plot_path}")
+        df = load_and_prepare_data()
+
+        # Define all plots and their creation functions
+        plot_definitions = {
+            "01_response_time.png": create_response_time_plot,
+            "02_throughput.png": create_throughput_plot,
+            "03_cpu_usage.png": create_cpu_plot,
+            "04_memory_usage.png": create_memory_plot,
+            "05_efficiency_scatter.png": create_efficiency_scatter_plot,
+        }
+
+        # --- Create Main Dashboard ---
+        fig, axes = plt.subplots(3, 2, figsize=(15, 15))
+        fig.suptitle(
+            "Routing Services Performance Dashboard", fontsize=16, fontweight="bold"
+        )
+        flat_axes = axes.flatten()
+
+        for i, (_filename, plot_func) in enumerate(plot_definitions.items()):
+            if i < len(flat_axes):
+                plot_func(df, flat_axes[i])
+
+        for i in range(len(plot_definitions), len(flat_axes)):
+            flat_axes[i].set_visible(False)
+
+        # Apply the corrected tight_layout call for the dashboard
+        plt.tight_layout(rect=(0, 0.03, 1, 0.95))
+        dashboard_path = os.path.join(IMAGES_DIR, "performance_dashboard.png")
+        plt.savefig(dashboard_path, dpi=150)
+        plt.close(fig)
+        print(f"✅ Performance dashboard saved: {dashboard_path}")
+
+        # --- Save Detailed Plots ---
+        for filename, plot_func in plot_definitions.items():
+            fig_single, ax_single = plt.subplots(figsize=(8, 6))
+            save_plot(fig_single, ax_single, plot_func, df, filename)
+
+        print(
+            f"✅ {len(plot_definitions)} detailed plots saved in: {DETAILED_PERFORMANCE_DIR}"
+        )
 
     except FileNotFoundError as e:
         print(f"❌ {e}")
-        print("Run benchmark tests first:")
-        print("python -m pytest tests/test_ab_routing_benchmarking.py --benchmark-only")
+        print("💡 Run benchmark tests first using `pytest`.")
+    except Exception as e:
+        print(f"❌ An unexpected error occurred: {e}")
+        import traceback
+
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -54,6 +54,7 @@ coordinates_list = get_test_coordinates()
 SERVICES = [
     {
         "name": "motis",
+        "type": "container",
         "label": "MOTIS",
         "color": "#1f77b4",
         "marker": "o",
@@ -65,6 +66,7 @@ SERVICES = [
     },
     {
         "name": "google",
+        "type": "api",
         "label": "Google Maps",
         "color": "#ff7f0e",
         "marker": "x",
@@ -76,6 +78,7 @@ SERVICES = [
     },
     # {
     #     "name": "otp",
+    #     "type": "api",
     #     "label": "OTP",
     #     "color": "#d62728",
     #     "marker": "^",
@@ -87,6 +90,7 @@ SERVICES = [
     # },
     # {
     #     "name": "valhalla",
+    #     "type": "container",
     #     "label": "Valhalla",
     #     "color": "#2ca02c",
     #     "marker": "s",
@@ -104,9 +108,11 @@ def get_service_by_name(name):
     return next((s for s in SERVICES if s["name"] == name), None)
 
 
-# Helper function to get AVAILABLE_SERVICES format for backward compatibility
-def get_available_services():
-    """Get services in AVAILABLE_SERVICES format for visualization scripts."""
+def get_services_by_type(service_type: str):
+    return [s for s in SERVICES if s["type"] == service_type]
+
+
+def get_service_config():
     return {
         service["name"]: {
             "label": service["label"],

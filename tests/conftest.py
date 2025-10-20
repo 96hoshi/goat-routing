@@ -11,30 +11,69 @@ TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
 ).isoformat() + "Z"
 
 RESULT_DIR = "tests/results/"
-IMAGES_DIR = "tests/results/images/"
-RESULT_FILE = "benchmark_results.csv"
-RESPONSES_DIR = "tests/results/responses/"
-
-BENCHMARK_FILE = os.path.join(RESULT_DIR, RESULT_FILE)
+IMAGES_DIR = os.path.join(RESULT_DIR, "images")
+RESPONSES_DIR = os.path.join(RESULT_DIR, "responses")
+BENCHMARK_DIR = os.path.join(RESULT_DIR, "benchmarks")
 
 
 @pytest.fixture(scope="session")
-def benchmark_reporter():
-    """A session-scoped fixture to collect benchmark data and write it once."""
+def container_benchmark_reporter(request):
+    """Fixture to collect benchmark results for containerized services."""
     results = []
-    os.makedirs(RESULT_DIR, exist_ok=True)  # Ensure directory exists
+    # Attach the list to the config so we can access it later
+    request.config.container_benchmark_data = results
     yield results
 
-    if not results:
-        print("\nNo benchmark results to report.")
-        return
 
-    print(f"\nWriting {len(results)} benchmark results to {BENCHMARK_FILE}...")
-    with open(BENCHMARK_FILE, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=results[0].keys())
-        writer.writeheader()
-        writer.writerows(results)
-    print("Benchmark report written successfully.")
+@pytest.fixture(scope="session")
+def api_benchmark_reporter(request):
+    """Fixture to collect benchmark results for external API services."""
+    results = []
+    # Attach the list to the config so we can access it later
+    request.config.api_benchmark_data = results
+    yield results
+
+
+def pytest_sessionfinish(session):
+    """
+    Hook that runs after the entire test session finishes.
+    Writes collected benchmark data to separate CSV files.
+    """
+    print("\n--- Writing final benchmark reports ---")
+    os.makedirs(RESULT_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # --- Write the Container Benchmark Report ---
+    container_data = getattr(session.config, "container_benchmark_data", [])
+    if container_data:
+        filename = os.path.join(RESULT_DIR, f"container_benchmarks_{timestamp}.csv")
+        print(
+            f"Writing {len(container_data)} container benchmark results to {filename}..."
+        )
+
+        fieldnames = container_data[0].keys()
+
+        with open(filename, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(container_data)
+    else:
+        print("No container benchmark data to write.")
+
+    # --- Write the API Benchmark Report ---
+    api_data = getattr(session.config, "api_benchmark_data", [])
+    if api_data:
+        filename = os.path.join(RESULT_DIR, f"api_benchmarks_{timestamp}.csv")
+        print(f"Writing {len(api_data)} API benchmark results to {filename}...")
+
+        fieldnames = api_data[0].keys()
+
+        with open(filename, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(api_data)
+    else:
+        print("No API benchmark data to write.")
 
 
 @pytest.fixture(scope="session")
@@ -54,7 +93,7 @@ def response_writer():
     yield Writer()
 
 
-def write_result(row, filename: str = RESULT_FILE, headers=None):
+def write_result(row, filename, headers=None):
     """
     Write a single result to a CSV file in the results directory.
     """
