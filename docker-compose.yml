@@ -64,7 +64,7 @@ services:
       - ./geodata:/app/motis/geodata
       - ./motis_entrypoint.sh:/app/entrypoint.sh:ro
     working_dir: /app/motis
-    command: [ "/bin/sh", "/app/entrypoint.sh" ]
+    command: [ "/bin/sh", "/app/entrypoint.sh", "local" ]
     networks:
       proxy:
 

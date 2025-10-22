@@ -30,6 +30,7 @@ print_error() {
 # Create necessary directories
 print_step "Creating log dir..."
 mkdir -p logs
+mkdir -p tests/results/reports
 
 # Function to run a command and log output
 run_command() {
@@ -92,7 +93,7 @@ main() {
 generate_report() {
     print_step "Generating comprehensive report..."
     
-    cat > tests/results/test_execution_report.md << EOF
+    cat > tests/results/reports/test_execution_report.md << EOF
 # Routing Test Suite Execution Report
 
 **Generated:** $(date)
@@ -138,7 +139,7 @@ $(find logs -name "*.log" -printf "- %f\n" 2>/dev/null || echo "- No log files f
 *This report was generated automatically by the test suite execution script.*
 EOF
     
-    print_success "Report generated: tests/results/test_execution_report.md"
+    print_success "Report generated: tests/results/reports/test_execution_report.md"
 }
 
 # Function to show final summary

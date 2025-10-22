@@ -10,7 +10,7 @@ from tests.utils.commons import coordinates_list, get_services_by_type
 from tests.utils.models import ServiceMetrics
 
 
-@pytest.mark.parametrize("coord", coordinates_list[:3])
+@pytest.mark.parametrize("coord", coordinates_list)
 @pytest.mark.parametrize("service", get_services_by_type("container"))
 def test_container_service_benchmark(
     benchmark, coord, service, container_benchmark_reporter, response_writer
@@ -54,7 +54,7 @@ def test_container_service_benchmark(
     container_benchmark_reporter.append(row)
 
 
-@pytest.mark.parametrize("coord", coordinates_list[:3])
+@pytest.mark.parametrize("coord", coordinates_list)
 @pytest.mark.parametrize("service", get_services_by_type("api"))
 def test_api_service_benchmark(benchmark, coord, service, api_benchmark_reporter):
     """

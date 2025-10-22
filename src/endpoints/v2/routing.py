@@ -7,7 +7,8 @@ from redis import Redis
 
 from src.core.config import settings
 from src.core.worker import run_catchment_area
-from src.schemas.ab_routing import IMotisPlan, motis_request_examples
+from src.schemas.ab_routing import IMotisPlan, motis_plan_examples
+from src.schemas.one_to_all import motis_onetoall_examples, OneToAllRequest
 from src.schemas.catchment_area import (
     ICatchmentAreaActiveMobility,
     ICatchmentAreaCar,
@@ -121,7 +122,7 @@ async def compute_catchment_area(
 async def compute_ab_routing(
     params: IMotisPlan = Body(
         ...,
-        example=motis_request_examples["default"],
+        example=motis_plan_examples["default"],
         description="The motis plan service required parameters.",
     ),
 ):
@@ -135,7 +136,7 @@ async def compute_motis_request(params: IMotisPlan):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
-                settings.MOTIS_PLAN_ENDPOINT, params=params.dict()
+                settings.MOTIS_PLAN_ENDPOINT, params=params.dict(by_alias=True)
             )
             response.raise_for_status()
 
@@ -146,6 +147,42 @@ async def compute_motis_request(params: IMotisPlan):
                 },
                 status_code=200,
             )
+
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"Error from motis service: {e.response.text}",
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=503, detail=f"Cannot connect to motis service: {e}"
+            )
+
+
+@router.post(
+    "/one-to-all",
+    summary="Calculate Reachable Stations",
+)
+async def calculate_one_to_all(
+    params: OneToAllRequest = Body(
+        ...,
+        example=motis_onetoall_examples["reachability_from_coordinate_with_time"],
+        description="This endpoint calculates reachable stations within a specified duration from a starting location.",
+    )
+):
+
+    return await compute_one_to_all_request(params)
+
+
+async def compute_one_to_all_request(params: OneToAllRequest):
+    async with httpx.AsyncClient() as client:
+        try:
+            response: httpx.Response = await client.get(
+                settings.MOTIS_ONETOALL_ENDPOINT, params=params.dict(by_alias=True)
+            )
+            response.raise_for_status()
+
+            return JSONResponse(response.json(), status_code=response.status_code)
 
         except httpx.HTTPStatusError as e:
             raise HTTPException(

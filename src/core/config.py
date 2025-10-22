@@ -62,7 +62,10 @@ class Settings(BaseSettings):
     MOTIS_PORT: Optional[str] = "8080"
     MOTIS_BASE_URL: Optional[str] = None
     MOTIS_PLAN_ENDPOINT: Optional[str] = None
-    MOTIS_ROUTE = "/ab-routing"
+    MOTIS_PLAN_ROUTE = "/ab-routing"
+    MOTIS_ONETOMANY_ENDPOINT: Optional[str] = None
+    MOTIS_ONETOALL_ENDPOINT: Optional[str] = None
+
 
     @validator("MOTIS_BASE_URL", pre=True)
     def motis_base_url(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -72,11 +75,17 @@ class Settings(BaseSettings):
     def motis_plan_endpoint(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
         return f'{values.get("MOTIS_BASE_URL")}/api/v5/plan/'
 
+    @validator("MOTIS_ONETOMANY_ENDPOINT")
+    def motis_many_endpoint(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        return f'{values.get("MOTIS_BASE_URL")}/api/v1/one-to-many'
+
+    @validator("MOTIS_ONETOALL_ENDPOINT")
+    def motis_all_endpoint(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        return f'{values.get("MOTIS_BASE_URL")}/api/v1/one-to-all'
+
     # Google Maps
     GOOGLE_API_KEY: str
-    GOOGLE_DIRECTIONS_URL: Optional[str] = (
-        "https://maps.googleapis.com/maps/api/directions/json"
-    )
+    GOOGLE_DIRECTIONS_URL: str = "https://maps.googleapis.com/maps/api/directions/json"
 
     # Valhalla
     VALHALLA_URL: str = "http://valhalla-gtfs:8002/route"
