@@ -12,55 +12,19 @@ from tests.utils.models import QueryResult, RouteSummary
 from tests.utils.payload_builders import (
     google_payload,
     motis_payload,
+    otp_payload,
     valhalla_payload,
 )
 
 
-def retry_api_call(func, max_retries=2):
-    """Retry API calls with exponential backoff."""
-    import time
-
-    for attempt in range(max_retries + 1):
-        try:
-            return func()
-        except (httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
-            if attempt == max_retries:
-                raise e
-            wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
-            print(
-                f"API call failed (attempt {attempt + 1}/{max_retries + 1}), retrying in {wait_time}s..."
-            )
-            time.sleep(wait_time)
-    return None
-
-
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371000  # meters
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = phi2 - phi1
-    dlambda = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dphi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    )
-    return 2 * R * math.asin(math.sqrt(a))
-
-
-def polyline_distance(points):
-    dist = 0
-    for i in range(1, len(points)):
-        dist += haversine(
-            points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]
-        )
-    return dist
-
-
-# -------------------------------------- Motis ------------------------------------ #
+# ------------------------------------------------------------ #
+#                      MOTIS API                               #
+# ------------------------------------------------------------ #
 def query_motis(origin, destination, time=TIME_BENCH, **kwargs) -> QueryResult:
     """Query MOTIS API and return standardized result."""
     payload = motis_payload(origin, destination, time=time, **kwargs)
     try:
-        response = client.post(settings.MOTIS_ROUTE, json=payload)
+        response = client.post(settings.PLAN_ROUTE, json=payload)
         response_size = len(response.content)
         data = response.json()
         return QueryResult.success_result(data, response_size)
@@ -72,7 +36,7 @@ def query_motis(origin, destination, time=TIME_BENCH, **kwargs) -> QueryResult:
 def query_motis_by_payload(payload: Dict[str, str]) -> QueryResult:
     """Query MOTIS API and return standardized result."""
     try:
-        response = client.post(settings.MOTIS_ROUTE, json=payload)
+        response = client.post(settings.PLAN_ROUTE, json=payload)
         response.raise_for_status()
         response_size = len(response.content)
         data = response.json()
@@ -182,6 +146,27 @@ def extract_motis_route_summary(result: Dict[str, Any]) -> RouteSummary:
     )
 
 
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371000  # meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = phi2 - phi1
+    dlambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def polyline_distance(points):
+    dist = 0
+    for i in range(1, len(points)):
+        dist += haversine(
+            points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]
+        )
+    return dist
+
+
 def _calculate_haversine_distance(leg: Dict[str, Any]) -> float:
     """Calculate distance between two points using haversine formula."""
     try:
@@ -269,7 +254,9 @@ def _extract_route_info(leg: Dict[str, Any]) -> list:
     return route_names
 
 
-# --------------------------- Google ---------------------- #
+# ------------------------------------------------------------ #
+#                    Google Directions API                     #
+# ------------------------------------------------------------ #
 def query_google(
     origin,
     destination,
@@ -296,6 +283,28 @@ def query_google(
     except Exception as e:
         error_msg = f"Error calling Google Directions API: {e}"
         return QueryResult.error_result(error_msg)
+
+
+def retry_api_call(func, max_retries=2):
+    """Retry API calls with exponential backoff."""
+    import time
+
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectTimeout,
+            httpx.ReadTimeout,
+        ) as e:
+            if attempt == max_retries:
+                raise e
+            wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
+            print(
+                f"API call failed (attempt {attempt + 1}/{max_retries + 1}), retrying in {wait_time}s..."
+            )
+            time.sleep(wait_time)
+    return None
 
 
 def extract_google_route_summary(directions_result):
@@ -374,7 +383,9 @@ def extract_google_driving_route_summary(response: Dict[str, Any]) -> RouteSumma
     )
 
 
-# -------------------------- Valhalla ---------------------- #
+# ------------------------------------------------------------ #
+#                     Valhalla API                             #
+# ------------------------------------------------------------ #
 def query_valhalla(
     origin: str,
     destination: str,
@@ -453,4 +464,116 @@ def extract_valhalla_route_summary(result: Dict[str, Any]) -> RouteSummary:
         num_routes=1,
         modes=modes,
         vehicle_lines=vehicle_lines,
+    )
+
+
+# ------------------------------------------------------------ #
+#                    OpenTripPlanner (OTP)                     #
+# ------------------------------------------------------------ #
+def query_otp(
+    origin,
+    destination,
+    transport_modes: list[str] = ["TRANSIT", "WALK"],
+    endpoint: str = str(settings.OPEN_TRIP_PLANNER_URL),
+) -> QueryResult:
+    """Query OpenTripPlanner GraphQL API and return standardized result."""
+    origin_str = f"{origin[0]},{origin[1]}"
+    destination_str = f"{destination[0]},{destination[1]}"
+
+    payload = otp_payload(origin_str, destination_str, transport_modes=transport_modes)
+
+    try:
+        with httpx.Client() as client_http:
+            response = client_http.post(
+                endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            http_status = response.status_code
+            response_size = len(response.content)
+
+            if "errors" in data:
+                return QueryResult.error_result(
+                    f"GraphQL errors in response:  {data['errors']}"
+                )
+            return QueryResult.success_result(data, response_size, http_status)
+
+    except httpx.HTTPError as e:
+        return QueryResult.error_result(f"HTTP Error: {e}")
+    except Exception as e:
+        return QueryResult.error_result(f"Error: {e}")
+
+
+def query_otp_by_payload(
+    payload, endpoint: str = str(settings.OPEN_TRIP_PLANNER_URL)
+) -> QueryResult:
+    """Query OTP GraphQL API with given payload and return standardized result."""
+    try:
+        with httpx.Client() as client_http:
+            response = client_http.post(
+                endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            http_status = response.status_code
+            response_size = len(response.content)
+            if "errors" in data:
+                return QueryResult.error_result(
+                    f"GraphQL errors in response:  {data['errors']}"
+                )
+            return QueryResult.success_result(data, response_size, http_status)
+
+    except httpx.HTTPError as e:
+        return QueryResult.error_result(f"HTTP Error: {e}")
+    except Exception as e:
+        return QueryResult.error_result(f"Error: {e}")
+
+
+def extract_otp_route_summary(response) -> RouteSummary:
+    """Extract route summary from OTP GraphQL response."""
+
+    if not response or "data" not in response:
+        return RouteSummary.empty_summary()
+
+    plan = response["data"].get("plan", {})
+    itineraries = plan.get("itineraries", [])
+    if not itineraries:
+        return RouteSummary.empty_summary()
+
+    # Use the first itinerary for summary
+    first_itinerary = itineraries[0]
+
+    # Extract basic metrics
+    duration_seconds = first_itinerary.get("duration", 0)
+
+    # Calculate total distance by summing all leg distances
+    distance_meters = 0.0
+    modes = []
+    vehicle_lines = set()
+
+    for leg in first_itinerary.get("legs", []):
+        mode = leg.get("mode", "")
+        if mode:
+            modes.append(mode)
+        # Extract route info for transit legs (non-null route)
+        route = leg.get("route")
+        if route is not None and isinstance(route, dict):
+            short_name = route.get("shortName", "")
+            if short_name:
+                vehicle_lines.add(short_name)
+
+        # Sum up leg distances
+        leg_distance = leg.get("distance", 0)
+        distance_meters += leg_distance
+
+    return RouteSummary(
+        duration_s=duration_seconds,
+        distance_m=round(distance_meters, 3),
+        num_routes=len(itineraries),
+        modes=modes,
+        vehicle_lines=list(vehicle_lines),
     )

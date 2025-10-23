@@ -73,7 +73,7 @@ Run all tests and generate reports automatically:
 # Make executable and run
 chmod +x run_tests.sh
 ./run_tests.sh
-
+```
 
 This script will:
 1. Run all test suites (plausibility, integration, MOTIS)
@@ -105,8 +105,14 @@ pytest-benchmark compare .benchmarks/<run>.json
 ```sh
 # List all generated plots
 ls -la tests/results/images/
-
+```
 ## Comparing and Visualizing Routing Services
+
+### Generate Benchmark Comparisons
+
+```sh
+python tests/scripts/benchmark_comparison.py
+```
 
 ### Generate Service Comparison Data
 
@@ -117,49 +123,14 @@ python tests/scripts/modes_comparison.py
 ### Generate Routing Visualizations
 
 ```sh
-# Generate all plot types (line, scatter, bar, grouped bar)
-python tests/scripts/visualize.py
-
-# Generate specific plot types
-python tests/scripts/visualize.py line,scatter
-
-# Generate only bar charts
-python tests/scripts/visualize.py bar,bar_grouped
+# Generate plots
+python tests/scripts/visualize_routing_comparison.py
 ```
 
 ### Generate Performance Comparisons
 
 ```sh
-python tests/scripts/visualize_performances.py
-```
-
-### Generate Benchmark Comparisons
-
-```sh
-python tests/scripts/benchmark_comparison.py
-```
-
-## File Structure
-
-```
-tests/
-├── scripts/
-│   ├── modes_comparison.py       # Generate comparison CSV data
-│   ├── visualize.py              # Create routing visualizations  
-│   ├── visualize_performances.py # Create performance charts
-│   └── benchmark_comparison.py   # Compare benchmark runs
-├── results/
-│   ├── benchmark_results.csv     # Performance metrics
-│   ├── *_comparison.csv          # Service comparison data
-│   ├── responses/                # Raw API responses
-│   └── test_execution_report.md  # Comprehensive report
-├── images/
-│   ├── *_comparison_line.png     # Line plot visualizations
-│   ├── *_comparison_scatter.png  # Scatter plot visualizations
-│   ├── *_comparison_bar.png      # Bar chart visualizations
-│   └── performance_comparison.png # Performance charts
-└── coords/
-    └── lists.py                  # Test coordinate sets
+python tests/scripts/visualize_benchmark.py
 ```
 
 ## Coordinate Sets
@@ -177,48 +148,16 @@ The test suite uses different coordinate sets for comprehensive testing:
 - **OpenTripPlanner (OTP):** Public transport and driving (if available)
 - **Valhalla:** Driving directions (if available)
 
-## Plot Types Generated
-
-### Routing Comparisons
-- **Line plots:** Show trends across routes
-- **Scatter plots:** Display data distribution
-- **Bar plots:** Compare individual metrics
-- **Grouped bar plots:** Direct service comparison
-
-### Performance Comparisons  
-- **Response time:** Service speed comparison
-- **Memory usage:** Resource utilization
-- **CPU usage:** Processing efficiency
-- **Response size:** Data payload analysis
-
 ## Usage Examples
 
 ```sh
 # Quick test run with visualization
-pytest tests/test_ab_routing_plausibility.py -v -s
-python tests/scripts/visualize.py line
+pytest tests/test_ab_routing_benchmarking.py -v -s
+python tests/scripts/visualize_benchmark.py
 
 # Full comprehensive analysis
-./run_all_tests_and_generate_reports.sh
+./run_tests.sh
 
 # View results
 ls tests/results/
-"$BROWSER" tests/results/test_execution_report.md
 ```
-
-## Troubleshooting
-
-### No Data Found
-- Check if services are properly configured in `src/core/config.py`
-- Verify API keys are set in environment variables
-- Run individual scripts to isolate issues
-
-### Missing Plots
-- Ensure CSV comparison files exist in `tests/results/`
-- Run `modes_comparison.py` first to generate data
-- Check log files in `logs/` directory
-
-### Performance Issues
-- Use smaller coordinate sets for faster testing
-- Run specific test files instead of full suite
-- Check service availability and response times

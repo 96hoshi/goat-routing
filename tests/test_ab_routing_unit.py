@@ -2,7 +2,7 @@ import respx
 from httpx import Response
 
 from src.core.config import settings
-from src.schemas.ab_routing import motis_request_examples
+from src.schemas.ab_routing import motis_plan_examples
 from tests.utils.commons import client
 
 
@@ -16,10 +16,9 @@ def test_compute_ab_routing_success():
         return_value=Response(200, json={"routes": [{"id": 1}]})
     )
 
-    response = client.post("/ab-routing", json=motis_request_examples["benchmark"])
+    response = client.post("/ab-routing", json=motis_plan_examples["default"])
     assert response.status_code == 200
     data = response.json()
-    assert data["message"] == "Plan computed successfully."
     assert "result" in data
 
 
@@ -32,7 +31,7 @@ def test_compute_ab_routing_motis_error():
         return_value=Response(500, text="Internal Server Error")
     )
 
-    response = client.post("/ab-routing", json=motis_request_examples["benchmark"])
+    response = client.post("/ab-routing", json=motis_plan_examples["default"])
     assert response.status_code == 500
     assert "Error from motis service" in response.json()["detail"]
 
@@ -48,6 +47,6 @@ def test_compute_ab_routing_connection_error():
         side_effect=httpx.ConnectError("Cannot connect")
     )
 
-    response = client.post("/ab-routing", json=motis_request_examples["benchmark"])
+    response = client.post("/ab-routing", json=motis_plan_examples["default"])
     assert response.status_code == 503
     assert "Cannot connect to motis service" in response.json()["detail"]

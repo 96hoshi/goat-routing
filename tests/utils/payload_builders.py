@@ -1,6 +1,6 @@
 from datetime import datetime
 from textwrap import dedent
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from src.core.config import settings
 from tests.conftest import TIME_BENCH
@@ -12,7 +12,7 @@ def motis_payload(
     destination: str,
     time: str = TIME_BENCH,
     detailed_transfers: bool = False,
-    maxItineraries: int = 6,
+    maxItineraries: Optional[int] = None,
     **kwargs,
 ) -> Dict[str, str]:
     """
@@ -20,14 +20,37 @@ def motis_payload(
     """
     detailed = "true" if detailed_transfers else "false"
 
-    return {
+    payload = {
         "fromPlace": origin,
         "toPlace": destination,
         "time": time,
         "detailedTransfers": detailed,
-        "maxItineraries": str(maxItineraries),
+        "numItineraries": maxItineraries,
         **kwargs,
     }
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def build_one_to_all_payload(
+    start_location: str,
+    max_travel_time: int,
+    time: Optional[str] = None,
+    transit_modes: Optional[List[str]] = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """
+    Builds a request payload for the MOTIS "one-to-all" service.
+    """
+    payload = {
+        "one": start_location,
+        "maxTravelTime": max_travel_time,
+        "time": time,
+        "transitModes": transit_modes,
+        **kwargs,
+    }
+
+    # Cleanly remove any optional keys that were not provided (i.e., are None)
+    return {k: v for k, v in payload.items() if v is not None}
 
 
 def google_payload(

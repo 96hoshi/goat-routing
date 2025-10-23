@@ -9,7 +9,7 @@ class QueryResult:
 
     success: bool
     data: Optional[Dict[str, Any]]
-    response_size: int
+    response_size: int  # in bytes
     error_message: Optional[str] = None
     status_code: Optional[int] = None
 
@@ -27,7 +27,11 @@ class QueryResult:
     @classmethod
     def error_result(cls, error_message: str):
         return cls(
-            success=False, data=None, response_size=0, error_message=error_message
+            success=False,
+            data=None,
+            response_size=0,
+            error_message=error_message,
+            status_code=None,
         )
 
 

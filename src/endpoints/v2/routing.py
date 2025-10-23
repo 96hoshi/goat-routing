@@ -8,12 +8,12 @@ from redis import Redis
 from src.core.config import settings
 from src.core.worker import run_catchment_area
 from src.schemas.ab_routing import IMotisPlan, motis_plan_examples
-from src.schemas.one_to_all import motis_onetoall_examples, OneToAllRequest
 from src.schemas.catchment_area import (
     ICatchmentAreaActiveMobility,
     ICatchmentAreaCar,
     request_examples,
 )
+from src.schemas.one_to_all import OneToAllRequest, motis_onetoall_examples
 from src.schemas.status import ProcessingStatus
 
 router = APIRouter()
@@ -141,11 +141,7 @@ async def compute_motis_request(params: IMotisPlan):
             response.raise_for_status()
 
             return JSONResponse(
-                content={
-                    "result": response.json(),
-                    "message": "Plan computed successfully.",
-                },
-                status_code=200,
+                {"result": response.json(), "status_code": response.status_code}
             )
 
         except httpx.HTTPStatusError as e:
@@ -168,28 +164,33 @@ async def calculate_one_to_all(
         ...,
         example=motis_onetoall_examples["reachability_from_coordinate_with_time"],
         description="This endpoint calculates reachable stations within a specified duration from a starting location.",
-    )
+    ),
 ):
-
     return await compute_one_to_all_request(params)
 
 
 async def compute_one_to_all_request(params: OneToAllRequest):
     async with httpx.AsyncClient() as client:
         try:
+            payload = params.dict(by_alias=True)
             response: httpx.Response = await client.get(
-                settings.MOTIS_ONETOALL_ENDPOINT, params=params.dict(by_alias=True)
+                settings.MOTIS_ONETOALL_ENDPOINT, params=payload
             )
             response.raise_for_status()
-
-            return JSONResponse(response.json(), status_code=response.status_code)
+            return JSONResponse(
+                {"result": response.json(), "status_code": response.status_code}
+            )
 
         except httpx.HTTPStatusError as e:
+            # This handles errors from a successful connection (e.g., 400, 404, 500)
             raise HTTPException(
                 status_code=e.response.status_code,
                 detail=f"Error from motis service: {e.response.text}",
             )
+
         except httpx.RequestError as e:
+            # This handles network errors (e.g., connection refused, DNS lookup failed)
             raise HTTPException(
-                status_code=503, detail=f"Cannot connect to motis service: {e}"
+                status_code=503,  # 503 Service Unavailable is the correct code
+                detail=f"Cannot connect to motis service: {e}",
             )

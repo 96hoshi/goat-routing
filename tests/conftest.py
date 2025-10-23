@@ -111,7 +111,7 @@ def write_result(row, filename, headers=None):
         writer.writerow(row)
 
 
-def write_response(data: dict, filename: str):
+def write_response(data, filename: str):
     """
     Write a JSON response to the responses directory.
     """

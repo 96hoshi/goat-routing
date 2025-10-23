@@ -167,16 +167,8 @@ def validate_service_response(
 
     elif service_name == "motis":
         if isinstance(response_data, dict):
-            # MOTIS has a nested structure: response_data.result.connections
             result = response_data.get("result", {})
-            message = response_data.get("message", "")
-
-            # Check for successful message and presence of result
-            has_success_message = "successfully" in message.lower()
-            has_result = isinstance(result, dict)
-
-            # MOTIS might return empty connections but still be valid
-            return has_success_message and has_result
+            return "itineraries" in result
 
     return True
 

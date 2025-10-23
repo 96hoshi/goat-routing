@@ -35,7 +35,7 @@ ignore = [
 "__init__.py" = ["F401"]
 
 [tool.poetry.dependencies]
-python = ">3.9,<3.12"
+python = ">3.10.7,<3.12"
 uvicorn = "^0.17.6"
 fastapi = {extras = ["all"], version = "^0.96.1"}
 pydantic = "^1.10.7"
@@ -57,11 +57,10 @@ sentry-sdk = {extras = ["celery", "fastapi"], version = "^2.14.0"}
 rich = "^13.9.4"
 httpx = "^0.24.0"
 
-
 [tool.poetry.group.dev.dependencies]
 sqlalchemy-stubs = "^0.3"
 debugpy = "^1.4.1"
-ruff = "^0.0.269"
+ruff = "^0.0.291"
 black = "^23.3.0"
 pytest = "^8.1.0"
 pytest-asyncio = "^0.21.0"
@@ -69,12 +68,14 @@ pytest-cov = "^4.1.0"
 pytest-mock = "^3.11.1"
 pytest-postgresql = "^5.0.0"
 pre-commit = "^3.3.3"
-pytest-benchmark = "^5.1.0" 
+pytest-benchmark = "^5.1.0"
 pytest-testmon = "^2.0.9"
 pytest-sugar = "^0.9.7"
 pytest-xdist = "^3.1.0"
-httpx = "^0.24.0"
-respx = "^0.21.0" 
+respx = "^0.21.0"
+matplotlib = "^3.10.7"
+seaborn = "^0.13.2"
+docker = "^7.1.0"
 
 [build-system]
 requires = ["poetry-core"]

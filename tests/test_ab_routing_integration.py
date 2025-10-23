@@ -1,28 +1,31 @@
 import pytest
 
+from src.core.config import settings
 from tests.utils.commons import client, coordinates_list
+from tests.utils.models import QueryResult
 from tests.utils.payload_builders import motis_payload
+from tests.utils.query_helpers import query_motis_by_payload
 
 
-@pytest.mark.parametrize("origin,destination", coordinates_list)  # Limit for speed
+@pytest.mark.parametrize("origin,destination", coordinates_list[:3])  # Limit for speed
 def test_ab_routing_endpoint_basic(origin, destination):
     """Basic integration test: endpoint responds correctly."""
-
-    response = client.post(
-        "/ab-routing",
-        json=motis_payload(origin, destination),
+    payload = motis_payload(
+        origin, destination, detailed_transfers=True, maxItineraries=3
     )
+    response: QueryResult = query_motis_by_payload(payload)
 
     if response.status_code != 200:
-        pytest.skip(f"MOTIS service unavailable: {response.status_code}")
+        pytest.fail(
+            f"Expected status 200, got {response.status_code}, payload: {response.data} "
+        )
 
-    data = response.json()
+    data = response.data
 
     # Basic API contract validation
     assert isinstance(data, dict), "Response should be JSON object"
     assert "result" in data, "Response should contain 'result'"
-    assert "message" in data, "Response should contain 'message'"
-    assert data["message"] == "Plan computed successfully."
+    assert "itineraries" in data["result"], "Result should contain 'itineraries'"
 
     # Basic result validation
     result = data["result"]
@@ -34,8 +37,7 @@ def test_ab_routing_endpoint_error_handling():
     """Test endpoint handles invalid input gracefully."""
 
     invalid_payload = {"invalid": "payload"}
-
-    response = client.post("/ab-routing", json=invalid_payload)
+    response = client.post(settings.PLAN_ROUTE, json=invalid_payload)
 
     # Should return error status for invalid payload
     assert response.status_code in [
@@ -49,8 +51,7 @@ def test_ab_routing_endpoint_availability():
 
     # Test with first coordinate pair
     origin, destination = coordinates_list[0]
-
-    response = client.post("/ab-routing", json=motis_payload(origin, destination))
+    response = client.post(settings.PLAN_ROUTE, json=motis_payload(origin, destination))
 
     # Endpoint should exist (not 404)
     assert response.status_code != 404, "Endpoint should exist"

@@ -32,10 +32,12 @@
     "black"
   ],
   "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff", // Use Ruff for formatting
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit"
-    },
-    "editor.defaultFormatter": "ms-python.black-formatter"
+      "source.fixAll": "always", // Autofix lint errors on save
+      "source.organizeImports": "always" // Let Ruff handle import sorting on save
+    }
   },
   "files.associations": {
     "iosfwd": "cpp",
@@ -113,5 +115,8 @@
     "markdown",
     "latex",
     "plaintext"
+  ],
+  "githubPullRequests.ignoredPullRequestBranches": [
+    "main"
   ]
 }

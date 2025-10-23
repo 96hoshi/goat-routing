@@ -59,7 +59,7 @@ SERVICES = [
         "color": "#1f77b4",
         "marker": "o",
         "client": client,
-        "endpoint": str(settings.MOTIS_PLAN),
+        "endpoint": str(settings.PLAN_ROUTE),
         "payload_builder": motis_payload,
         "query_func": generic_query_service,
         "method": "POST",

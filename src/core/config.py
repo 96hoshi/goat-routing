@@ -62,10 +62,11 @@ class Settings(BaseSettings):
     MOTIS_PORT: Optional[str] = "8080"
     MOTIS_BASE_URL: Optional[str] = None
     MOTIS_PLAN_ENDPOINT: Optional[str] = None
-    MOTIS_PLAN_ROUTE = "/ab-routing"
     MOTIS_ONETOMANY_ENDPOINT: Optional[str] = None
     MOTIS_ONETOALL_ENDPOINT: Optional[str] = None
 
+    PLAN_ROUTE = "/ab-routing"
+    ONETOALL_ROUTE = "/one-to-all"
 
     @validator("MOTIS_BASE_URL", pre=True)
     def motis_base_url(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
