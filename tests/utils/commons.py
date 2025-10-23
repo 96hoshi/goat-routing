@@ -11,7 +11,11 @@ from tests.coords.lists import (
     germany_coordinates,
     mannheim_coordinates,
 )
-from tests.utils.payload_builders import google_payload, motis_payload
+from tests.utils.payload_builders import (
+    google_payload,
+    motis_payload,
+    one_to_all_payload,
+)
 
 from .benchmark_helpers import (
     generic_query_service,
@@ -60,7 +64,9 @@ SERVICES = [
         "marker": "o",
         "client": client,
         "endpoint": str(settings.PLAN_ROUTE),
+        "onetoall_endpoint": str(settings.ONETOALL_ROUTE),
         "payload_builder": motis_payload,
+        "onetoall_payload_builder": one_to_all_payload,
         "query_func": generic_query_service,
         "method": "POST",
     },
@@ -105,7 +111,7 @@ SERVICES = [
 
 def get_service_by_name(name):
     """Get service configuration by name."""
-    return next((s for s in SERVICES if s["name"] == name), None)
+    return (s for s in SERVICES if s["name"] == name)
 
 
 def get_services_by_type(service_type: str):

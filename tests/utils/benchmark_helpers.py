@@ -257,7 +257,7 @@ def _build_base_result(service, origin, dest, latency_stats):
     return {
         "service": service["name"],
         "origin": origin,
-        "destination": dest,
+        "destination": dest if dest is not None else "",
         "avg_time_ms": f"{latency_stats['mean'] * 1000:.3f}",
         "min_time_ms": f"{latency_stats['min'] * 1000:.3f}",
         "max_time_ms": f"{latency_stats['max'] * 1000:.3f}",
@@ -313,7 +313,7 @@ def build_container_result_row(
     dest,
     latency_stats,
     container_result: BenchmarkResult,
-    is_valid: bool,
+    is_valid: bool | None,
 ):
     """Builds the result row for containerized services with all collected metrics."""
     # Start with the common timing fields

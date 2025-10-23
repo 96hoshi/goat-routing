@@ -31,7 +31,7 @@ def motis_payload(
     return {k: v for k, v in payload.items() if v is not None}
 
 
-def build_one_to_all_payload(
+def one_to_all_payload(
     start_location: str,
     max_travel_time: int,
     time: Optional[str] = None,
