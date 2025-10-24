@@ -8,8 +8,10 @@ from tests.utils.query_helpers import (
     query_motis_by_payload,
 )
 
+COORDS = coordinates_list[:3]  # Limit for speed
 
-@pytest.mark.parametrize("origin,destination", coordinates_list[:3])  # Limit for speed
+
+@pytest.mark.parametrize("origin,destination", COORDS)  # Limit for speed
 def test_debug_response(origin, destination):
     """Debug test to see what MOTIS actually returns."""
 
@@ -42,7 +44,10 @@ def test_debug_response(origin, destination):
         print("❌ No response data received from MOTIS")
 
 
-@pytest.mark.parametrize("origin,destination", coordinates_list[:3])  # Limit for speed
+@pytest.mark.parametrize(
+    "origin,destination",
+    COORDS,
+)  # Limit for speed
 def test_individual_route(origin, destination):
     """Test individual routes (parametrized)."""
     print(f"\n🧪 Testing: {origin} -> {destination}")

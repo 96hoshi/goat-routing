@@ -6,7 +6,7 @@ import psutil
 import pytest
 
 from src.core.config import settings
-from tests.conftest import write_response, write_result
+from tests.conftest import write_result
 from tests.utils.models import ServiceMetrics
 from tests.utils.payload_builders import otp_payload
 from tests.utils.query_helpers import extract_otp_route_summary, query_otp
@@ -176,7 +176,7 @@ def test_otp_performance(origin, destination, mode):
 
 @pytest.mark.parametrize("mode", ["TRANSIT", "CAR"])
 @pytest.mark.parametrize("origin,destination", mannheim_list)
-def test_otp_routing(origin, destination, mode):
+def test_otp_routing(origin, destination, mode, response_writer):
     """Test OTP routing and write to consistent comparison CSV files."""
 
     # Test coordinates (Mannheim area) for car routing
@@ -220,7 +220,7 @@ def test_otp_routing(origin, destination, mode):
     write_result(row, filename=csv_filename, headers=list(row.keys()))
 
     # Save response for debugging
-    write_response(
+    response_writer.save(
         response.data,
         filename=f"otp_{origin}_{destination}_{mode_suffix}.json".replace(",", "_"),
     )

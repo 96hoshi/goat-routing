@@ -10,9 +10,10 @@ from tests.utils.query_helpers import (
 )
 
 COSTING_MODES = ["multimodal", "auto", "bicycle", "pedestrian", "bus"]
+COORDS = coordinates_list[:3]  # Limit for speed
 
 
-@pytest.mark.parametrize("origin,destination", coordinates_list[:3])
+@pytest.mark.parametrize("origin,destination", COORDS)
 def test_valhalla_routing_basic(origin, destination):
     """Test basic Valhalla routing functionality."""
     result, response_size = query_valhalla(
@@ -35,7 +36,7 @@ def test_valhalla_query_service_smoke_test():
     It performs one request and checks for a valid result.
     """
 
-    origin, destination = coordinates_list[0]
+    origin, destination = COORDS[0]
     payload = valhalla_payload(origin, destination, costing=COSTING_MODES[0])
 
     # Use a real httpx client for external calls
@@ -78,7 +79,7 @@ def test_valhalla_error_handling():
 @pytest.mark.integration
 def test_valhalla_service_available():
     """Integration test to verify Valhalla service is available."""
-    origin, destination = coordinates_list[0]
+    origin, destination = COORDS[0]
 
     result, response_size = query_valhalla(origin, destination)
 

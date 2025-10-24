@@ -4,9 +4,11 @@ from freezegun import freeze_time
 from httpx import ConnectError, Response
 
 from src.core.config import settings
-from tests.conftest import TIME_BENCH, write_response
+from tests.conftest import TIME_BENCH
 from tests.utils.commons import client, coordinates_list
 from tests.utils.payload_builders import one_to_all_payload
+
+COORDS = coordinates_list[:3]  # Limit for speed
 
 
 @freeze_time(
@@ -91,7 +93,7 @@ def test_motis_service_returns_400_error():
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("origin_coord", coordinates_list[:2])  # Limit for speed
+@pytest.mark.parametrize("origin_coord", COORDS)  # Limit for speed
 def test_one_to_all_integration(origin_coord):
     """
     Performs a real end-to-end test against the live MOTIS service for /one-to-all.
@@ -142,7 +144,7 @@ def test_one_to_all_integration(origin_coord):
 
 # try to reach any possible error codes from real service
 @pytest.mark.integration
-@pytest.mark.parametrize("coord", coordinates_list[:3])  # Limit for speed
+@pytest.mark.parametrize("coord", COORDS)  # Limit for speed
 def test_one_to_all_integration_errors(coord):
     """
     Test various error scenarios against the live MOTIS service for /one-to-all.
@@ -185,8 +187,8 @@ def test_one_to_all_integration_errors(coord):
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("origin_coord", coordinates_list[:2])  # Limit for speed
-def test_one_to_all_plausibility(origin_coord):
+@pytest.mark.parametrize("origin_coord", COORDS)  # Limit for speed
+def test_one_to_all_plausibility(origin_coord, response_writer):
     """
     Performs a real end-to-end test against the live MOTIS service for /one-to-all.
     The assertions have been updated to match the real MOTIS response structure.
@@ -226,4 +228,4 @@ def test_one_to_all_plausibility(origin_coord):
         assert 0 <= duration <= 3600, f"Duration {duration} is out of expected range."
 
     # save the response for manual inspection
-    write_response(data, f"one_to_all_plausibility_{origin.replace(',', '_')}.json")
+    response_writer.save(data, f"one_to_all_{origin.replace(',', '_')}.json")

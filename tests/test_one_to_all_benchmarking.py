@@ -9,8 +9,10 @@ from tests.utils.commons import (
     get_service_by_name,
 )
 
+COORDS = coordinates_list[:3]  # Limit for speed
 
-@pytest.mark.parametrize("coord", coordinates_list[:2])
+
+@pytest.mark.parametrize("coord", COORDS)
 @pytest.mark.parametrize("service", get_service_by_name("motis"))
 def test_container_service_benchmark(
     benchmark,

@@ -5,10 +5,11 @@ from tests.utils.models import QueryResult, RouteSummary
 from tests.utils.query_helpers import (
     extract_google_route_summary,
     extract_motis_route_summary,
-    # extract_valhalla_route_summary,
     query_google,
     query_motis,
 )
+
+COORDS = coordinates_list[:5]  # Limit for speed
 
 ROUTING_SERVICES = {
     "motis": (query_motis, extract_motis_route_summary),
@@ -31,6 +32,7 @@ COMPARISON_THRESHOLDS = {
     "MAX_ABSOLUTE_DURATION_DIFF_S": 2
     * 3600,  # Don't allow more than a 2-hour absolute difference
 }
+
 # --- Helper Functions for Readability ---
 
 
@@ -67,22 +69,25 @@ def assert_plausible_route_summary(summary: RouteSummary, service_name: str):
         ), f"[{service_name}] Long-distance route duration {summary.duration_s/3600:.1f}h exceeds max of {max_long_dur/3600}h"
 
 
-def generate_id(param):
-    """Creates a descriptive ID for pytest parametrization."""
-    if (
-        isinstance(param, tuple)
-        and len(param) == 2
-        and isinstance(param[0], (int, float))
-    ):
-        return f"Coord({param[0]:.2f},{param[1]:.2f})"
-    return str(param)
+# def generate_id(param):
+#     """Creates a descriptive ID for pytest parametrization."""
+#     if (
+#         isinstance(param, tuple)
+#         and len(param) == 2
+#         and isinstance(param[0], (int, float))
+#     ):
+#         return f"Coord({param[0]:.2f},{param[1]:.2f})"
+#     return str(param)
 
 
 # --- The Main Test Function ---
 
 
-@pytest.mark.integration  # This should definitely be marked as an integration test
-@pytest.mark.parametrize("origin,destination", coordinates_list[:5])
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "origin,destination",
+    COORDS,
+)
 def test_cross_service_consistency(origin, destination):
     """
     Compares results between multiple routing services for the same route
@@ -99,7 +104,6 @@ def test_cross_service_consistency(origin, destination):
                 if summary and not summary.is_empty():
                     results[name] = summary
         except Exception as e:
-            # Issue a formal pytest warning instead of just printing.
             pytest.fail(f"Service '{name}' failed during query: {e}")
 
     # 2. Skip test if not enough data is available for a comparison
@@ -142,15 +146,16 @@ def test_cross_service_consistency(origin, destination):
 
 @pytest.mark.parametrize(
     "origin,destination",
-    coordinates_list[:5],
-    ids=[f"{generate_id(o)}_to_{generate_id(d)}" for o, d in coordinates_list[:5]],
+    COORDS,
 )
 @pytest.mark.parametrize(
     "service_name,service_fns",
     ROUTING_SERVICES.items(),
     ids=list(ROUTING_SERVICES.keys()),
 )
-def test_route_plausibility(origin, destination, service_name, service_fns):
+def test_route_plausibility(
+    origin, destination, service_name, service_fns, response_writer
+):
     """Check that each service returns plausible results for a given route."""
     query_fn, summary_fn = service_fns
 
@@ -169,3 +174,8 @@ def test_route_plausibility(origin, destination, service_name, service_fns):
 
     # Single call to the validation helper
     assert_plausible_route_summary(result, service_name)
+    # Save response for debugging
+    response_writer.save(
+        response.data,
+        filename=f"{service_name}_{origin}_{destination}.json".replace(",", "_"),
+    )

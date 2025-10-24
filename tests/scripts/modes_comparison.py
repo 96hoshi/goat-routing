@@ -6,7 +6,7 @@ Clean routing comparison with proper separation of transport vs driving modes.
 
 from datetime import datetime
 
-from tests.conftest import write_response, write_result
+from tests.conftest import write_result
 from tests.utils.commons import coordinates_list
 from tests.utils.models import RouteSummary
 from tests.utils.query_helpers import (
@@ -194,7 +194,6 @@ def test_transport_routing():
                 service_name, service_config, result, size, mode
             )
             row.update(service_data)
-            write_response(result, f"{service_name}_{i}_{mode}.json")  # type: ignore
 
         write_result(row, filename=filename, headers=headers)
 

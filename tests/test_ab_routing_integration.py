@@ -6,8 +6,10 @@ from tests.utils.models import QueryResult
 from tests.utils.payload_builders import motis_payload
 from tests.utils.query_helpers import query_motis_by_payload
 
+COORDS = coordinates_list[:3]  # Limit for speed
 
-@pytest.mark.parametrize("origin,destination", coordinates_list[:3])  # Limit for speed
+
+@pytest.mark.parametrize("origin,destination", COORDS)
 def test_ab_routing_endpoint_basic(origin, destination):
     """Basic integration test: endpoint responds correctly."""
     payload = motis_payload(
@@ -50,7 +52,7 @@ def test_ab_routing_endpoint_availability():
     """Test that the endpoint exists and is available."""
 
     # Test with first coordinate pair
-    origin, destination = coordinates_list[0]
+    origin, destination = COORDS[0]
     response = client.post(settings.PLAN_ROUTE, json=motis_payload(origin, destination))
 
     # Endpoint should exist (not 404)

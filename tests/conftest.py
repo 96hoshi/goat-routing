@@ -109,16 +109,3 @@ def write_result(row, filename, headers=None):
         if not file_exists:
             writer.writeheader()
         writer.writerow(row)
-
-
-def write_response(data, filename: str):
-    """
-    Write a JSON response to the responses directory.
-    """
-    os.makedirs(RESPONSES_DIR, exist_ok=True)
-    filepath = os.path.join(RESPONSES_DIR, filename)
-    try:
-        with open(filepath, "w") as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        print(f"Error writing response to {filepath}: {e}")
