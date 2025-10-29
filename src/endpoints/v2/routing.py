@@ -14,6 +14,7 @@ from src.schemas.catchment_area import (
     request_examples,
 )
 from src.schemas.one_to_all import OneToAllRequest, motis_onetoall_examples
+from src.schemas.one_to_many import OneToManyRequest, motis_onetomany_examples
 from src.schemas.status import ProcessingStatus
 
 router = APIRouter()
@@ -115,6 +116,9 @@ async def compute_catchment_area(
         )
 
 
+# --------------------- AB-Routing Endpoint -------------------- #
+
+
 @router.post(
     "/ab-routing",
     summary="Compute AB-routing using motis",
@@ -153,6 +157,9 @@ async def compute_motis_request(params: IMotisPlan):
             raise HTTPException(
                 status_code=503, detail=f"Cannot connect to motis service: {e}"
             )
+
+
+# -------------------- One-to-All Routing Endpoint -------------------- #
 
 
 @router.post(
@@ -194,3 +201,66 @@ async def compute_one_to_all_request(params: OneToAllRequest):
                 status_code=503,  # 503 Service Unavailable is the correct code
                 detail=f"Cannot connect to motis service: {e}",
             )
+
+
+# -------------------- One-to-Many Routing Endpoint -------------------- #
+
+
+async def compute_one_to_many_request(params: OneToManyRequest):
+    """
+    Sends the request to the external routing service and handles responses.
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            # Convert Pydantic model to a dictionary using aliases (e.g., max_travel_time -> max)
+            # `exclude_none=True` is good practice to avoid sending optional fields that are not set.
+            payload = params.dict(by_alias=True, exclude_none=True)
+
+            # Make the GET request to the external service with the payload as query parameters
+            response: httpx.Response = await client.get(
+                settings.MOTIS_ONETOMANY_ENDPOINT, params=payload
+            )
+
+            # Raise an exception for 4xx or 5xx status codes
+            response.raise_for_status()
+
+            # This pattern returns a JSON object containing the result from the upstream
+            # service and its status code. FastAPI will wrap this in a 200 OK response.
+            return JSONResponse(
+                content={"result": response.json(), "status_code": response.status_code}
+            )
+
+        except httpx.HTTPStatusError as e:
+            # Handle non-2xx responses from the external service (e.g., 400 Bad Request, 500 Server Error)
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"Error from routing service: {e.response.text}",
+            )
+
+        except httpx.RequestError as e:
+            # Handle network-level errors (e.g., connection failed, DNS error)
+            raise HTTPException(
+                status_code=503,  # Service Unavailable
+                detail=f"Cannot connect to the routing service: {str(e)}",
+            )
+
+
+@router.post(
+    "/one-to-many",
+    summary="Calculate One-to-Many Routes",
+    # You can also add a response_model for better documentation
+)
+async def calculate_one_to_many(
+    params: OneToManyRequest = Body(
+        ...,
+        # Use a relevant example for better API documentation (e.g., Swagger UI)
+        example=motis_onetomany_examples["bike_tour_berlin"]["payload"],
+        description="Calculates travel time and routes from a single origin to "
+        "multiple destinations based on the provided parameters.",
+    ),
+):
+    """
+    This endpoint serves as a proxy to an external routing service,
+    calculating travel times from one point to many destinations.
+    """
+    return await compute_one_to_many_request(params)
