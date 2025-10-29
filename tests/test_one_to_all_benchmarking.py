@@ -9,7 +9,7 @@ from tests.utils.commons import (
     get_service_by_name,
 )
 
-COORDS = coordinates_list[:3]  # Limit for speed
+COORDS = coordinates_list[:10]  # Limit for speed
 
 
 @pytest.mark.parametrize("coord", COORDS)
@@ -47,7 +47,6 @@ def test_container_service_benchmark(
 
     # Part 3: Validate and Report (using our hybrid result builder)
     assert container_result and container_result.status_code == 200
-
     # ... save response, build row, append to reporter ...
     row = build_container_result_row(
         service=service,

@@ -115,7 +115,7 @@ mannheim_coordinates = [
     ),  # Neckarstadt-West → Käfertal
 ]
 
-germany_coordinates = germany_coordinates = [
+germany_coordinates = [
     # --- Long Distance Routes (> 20 km) ---
     (
         "52.525592,13.369545",  # Berlin Hauptbahnhof
@@ -137,18 +137,6 @@ germany_coordinates = germany_coordinates = [
         "51.314959,9.497554",  # Kassel-Wilhelmshöhe
         "49.412497,8.694605",  # Heidelberg Hauptbahnhof
     ),  # Kassel-Wilhelmshöhe → Heidelberg Hbf (~200 km)
-    (
-        "52.525592,13.369545",  # Berlin Hauptbahnhof
-        "52.376822,9.734188",  # Hannover Hauptbahnhof
-    ),  # Berlin Hbf → Hannover Hbf (~280 km)
-    (
-        "50.107147,8.663789",  # Frankfurt (Main) Hauptbahnhof
-        "48.784013,9.176985",  # Stuttgart Hauptbahnhof
-    ),  # Frankfurt Hbf → Stuttgart Hbf (~200 km)
-    (
-        "53.552809,9.979069",  # Hamburg Hauptbahnhof
-        "52.525592,13.369545",  # Berlin Hauptbahnhof
-    ),  # Hamburg Hbf → Berlin Hbf (~280 km)
     (
         "51.228189,6.769931",  # Düsseldorf Hauptbahnhof
         "50.939227,6.957500",  # Köln Hauptbahnhof
@@ -186,10 +174,6 @@ germany_coordinates = germany_coordinates = [
         "48.998495,12.091007",  # Regensburg Hauptbahnhof
     ),  # Füssen Bahnhof → Regensburg Hbf (~220 km)
     (
-        "51.314959,9.497554",  # Kassel-Wilhelmshöhe
-        "50.076823,8.232704",  # Wiesbaden Hauptbahnhof
-    ),  # Kassel-Wilhelmshöhe → Wiesbaden Hbf (~190 km)
-    (
         "53.868778,11.144882",  # Wismar Hauptbahnhof
         "51.341147,12.378772",  # Leipzig Hauptbahnhof
     ),  # Wismar Hbf → Leipzig Hbf (~340 km)
@@ -202,7 +186,7 @@ germany_coordinates = germany_coordinates = [
         "51.482084,11.970228",  # Halle (Saale) Hauptbahnhof
     ),  # Braunschweig Hbf → Halle (Saale) Hbf (~150 km)
     (
-        "50.980424,11.328766",  # Weimar Hauptbahnhof
+        "50.980424,11.328766",  # Erfurt Hauptbahnhof
         "49.231908,7.009366",  # Saarbrücken Hauptbahnhof
     ),  # Weimar Hbf → Saarbrücken Hbf (~370 km)
     (
@@ -214,18 +198,37 @@ germany_coordinates = germany_coordinates = [
         "54.089887,12.138891",  # Rostock Hauptbahnhof
     ),  # Mannheim Hbf → Rostock Hbf (~660 km)
     (
+        "52.475994,13.365248",  # Berlin Südkreuz
+        "52.756209,13.250556",  # Oranienburg Bahnhof
+    ),  # Berlin Südkreuz → Oranienburg Bahnhof (~35 km)
+    (
+        "51.514339,7.464731",  # Dortmund Hauptbahnhof
+        "51.534241,7.690185",  # Unna Bahnhof
+    ),  # Dortmund Hbf → Unna Bahnhof (~25 km)
+    (
+        "52.525592,13.369545",  # Berlin Hauptbahnhof
+        "52.376822,9.734188",  # Hannover Hauptbahnhof
+    ),  # Berlin Hbf → Hannover Hbf (~280 km)
+    (
+        "50.107147,8.663789",  # Frankfurt (Main) Hauptbahnhof
+        "48.784013,9.176985",  # Stuttgart Hauptbahnhof
+    ),  # Frankfurt Hbf → Stuttgart Hbf (~200 km)
+    (
+        "53.552809,9.979069",  # Hamburg Hauptbahnhof
+        "52.525592,13.369545",  # Berlin Hauptbahnhof
+    ),  # Hamburg Hbf → Berlin Hbf (~280 km)
+    (
+        "51.314959,9.497554",  # Kassel-Wilhelmshöhe
+        "50.076823,8.232704",  # Wiesbaden Hauptbahnhof
+    ),  # Kassel-Wilhelmshöhe → Wiesbaden Hbf (~190 km)
+    (
         "47.570258,10.738361",  # Füssen Bahnhof
         "47.551676,10.725907",  # Pfronten-Ried (train station)
-    ),  # Füssen Bahnhof → Pfronten-Ried (~20 km) - A good regional example
-    # --- Regional Routes (> 20 km) ---
+    ),  # Füssen Bahnhof → Pfronten-Ried (~20 km)
     (
         "52.525592,13.369545",  # Berlin Hauptbahnhof
         "52.392095,13.06447",  # Potsdam Hauptbahnhof
     ),  # Berlin Hbf → Potsdam Hbf (~27 km)
-    (
-        "52.475994,13.365248",  # Berlin Südkreuz
-        "52.756209,13.250556",  # Oranienburg Bahnhof
-    ),  # Berlin Südkreuz → Oranienburg Bahnhof (~35 km)
     (
         "52.525592,13.369545",  # Berlin Hauptbahnhof
         "52.393174,13.526760",  # Königs Wusterhausen Bahnhof
@@ -246,10 +249,6 @@ germany_coordinates = germany_coordinates = [
         "50.939227,6.957500",  # Köln Hauptbahnhof
         "51.026410,7.564470",  # Gummersbach Bahnhof
     ),  # Cologne Hbf → Gummersbach Bahnhof (~55 km)
-    (
-        "51.514339,7.464731",  # Dortmund Hauptbahnhof
-        "51.534241,7.690185",  # Unna Bahnhof
-    ),  # Dortmund Hbf → Unna Bahnhof (~25 km)
     (
         "50.107147,8.663789",  # Frankfurt (Main) Hauptbahnhof
         "50.076823,8.232704",  # Wiesbaden Hauptbahnhof

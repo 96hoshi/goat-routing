@@ -7,6 +7,7 @@ import pytest
 
 from src.core.config import settings
 from tests.conftest import write_result
+from tests.coords.lists import mannheim_coordinates
 from tests.utils.models import ServiceMetrics
 from tests.utils.payload_builders import otp_payload
 from tests.utils.query_helpers import extract_otp_route_summary, query_otp
@@ -16,14 +17,15 @@ OTP_TRANSPORT_CSV_FILE = "otp_routes_transport.csv"
 OTP_DRIVING_CSV_FILE = "otp_routes_driving.csv"
 OTP_PERFORMANCE_FILE = "otp_performance.csv"
 
-mannheim_list = [
-    (
-        ("49.487459,8.466039"),
-        ("49.452030,8.468946"),
-    ),  # Mannheim Hbf to Mannheim Neckarau
-    (("49.487459,8.466039"), ("49.395428,8.672437")),  # Mannheim Hbf to Ludwigshafen
-    (("49.395428,8.672437"), ("49.487459,8.466039")),  # Ludwigshafen to Mannheim Hbf
-]
+# mannheim_list = [
+#     (
+#         ("49.487459,8.466039"),
+#         ("49.452030,8.468946"),
+#     ),  # Mannheim Hbf to Mannheim Neckarau
+#     (("49.487459,8.466039"), ("49.395428,8.672437")),  # Mannheim Hbf to Ludwigshafen
+#     (("49.395428,8.672437"), ("49.487459,8.466039")),  # Ludwigshafen to Mannheim Hbf
+# ]
+mannheim_list = mannheim_coordinates[:10]  # Limit for speed
 
 
 @dataclass
@@ -221,7 +223,7 @@ def test_otp_routing(origin, destination, mode, response_writer):
 
     # Save response for debugging
     response_writer.save(
-        response.data,
+        data,
         filename=f"otp_{origin}_{destination}_{mode_suffix}.json".replace(",", "_"),
     )
 

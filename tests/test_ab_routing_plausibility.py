@@ -176,6 +176,6 @@ def test_route_plausibility(
     assert_plausible_route_summary(result, service_name)
     # Save response for debugging
     response_writer.save(
-        response.data,
+        response.data["result"],
         filename=f"{service_name}_{origin}_{destination}.json".replace(",", "_"),
     )
