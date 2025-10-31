@@ -67,6 +67,7 @@ class Settings(BaseSettings):
 
     PLAN_ROUTE = "/ab-routing"
     ONETOALL_ROUTE = "/one-to-all"
+    ONETOMANY_ROUTE = "/one-to-many"
 
     @validator("MOTIS_BASE_URL", pre=True)
     def motis_base_url(cls, v: Optional[str], values: Dict[str, Any]) -> Any:

@@ -101,15 +101,26 @@ class IMotisPlan(BaseModel):
         title="Modes",
         description="Array of desired modes of transport.",
     )
+    num_itineraries: Optional[int] = Field(
+        default=None,
+        alias="numItineraries",
+        title="Number of Itineraries",
+        description="The number of itineraries to compute.",
+    )
+    max_itineraries: Optional[int] = Field(
+        default=5,
+        alias="maxItineraries",
+        title="Maximum Itineraries",
+        description="The maximum number of itineraries to compute.",
+    )
 
     # --- Timetable-Dependent Fields ---
-    num_itineraries: Optional[int] = Field(
-        default=5,
-        alias="numItineraries",
-        title="Minimum Itineraries",
-        description="The minimum number of itineraries to compute. Only relevant if timetableView=true.",
-        ge=1,  # A minimum of 1 makes logical sense
-    )
+    # max_itineraries: Optional[int] = Field(
+    #     default=5,
+    #     alias="maxItineraries",
+    #     title="Minimum Itineraries",
+    #     description="The minimum number of itineraries to compute. Only relevant if timetableView=true.",
+    # )
 
     class Config:
         use_enum_values = True

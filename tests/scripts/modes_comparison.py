@@ -241,11 +241,11 @@ def compare_routing_modes():
     # Test transport routing
     if TRANSPORT:
         transport_file = test_transport_routing()
-        print(f"   Transport: /app/tests/results/{transport_file}")
+        print(f"   Transport: /app/results/{transport_file}")
 
     if DRIVE:
         driving_file = test_driving_routing()
-        print(f"   Driving: /app/tests/results/{driving_file}")
+        print(f"   Driving: /app/results/{driving_file}")
 
 
 if __name__ == "__main__":

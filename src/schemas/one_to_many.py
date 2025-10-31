@@ -3,7 +3,6 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from src.schemas.ab_routing import MotisMode
-from src.schemas.one_to_all import ElevationCosts
 
 
 class OneToManyRequest(BaseModel):
@@ -19,11 +18,11 @@ class OneToManyRequest(BaseModel):
     )
 
     # Note: `max` is a built-in function, so we use an alias.
-    max_travel_time: int = Field(
+    max: int = Field(
         ..., alias="max", description="Maximum travel time in seconds.", gt=0
     )
 
-    max_matching_distance: int = Field(
+    maxMatchingDistance: int = Field(
         ...,
         alias="maxMatchingDistance",
         description="Maximum matching distance in meters to match geo coordinates to the street network.",
@@ -31,20 +30,13 @@ class OneToManyRequest(BaseModel):
     )
 
     mode: MotisMode = Field(
-        default=MotisMode.WALK,
         description="Routing profile to use (currently supported: WALK, BIKE, CAR).",
     )
 
-    arrive_by: bool = Field(
+    arriveBy: bool = Field(
         ...,
         alias="arriveBy",
         description="If True, calculates many-to-one routes. If False, calculates one-to-many routes.",
-    )
-
-    elevation_costs: ElevationCosts = Field(
-        default=ElevationCosts.NONE,
-        alias="elevationCosts",
-        description="Set an elevation cost profile to penalize routes with incline, primarily for BIKE mode.",
     )
 
     class Config:

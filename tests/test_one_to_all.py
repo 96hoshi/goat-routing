@@ -5,6 +5,7 @@ from httpx import ConnectError, Response
 
 from src.core.config import settings
 from tests.conftest import TIME_BENCH
+from tests.coords.lists import fixture_coordinates
 from tests.utils.commons import client, coordinates_list
 from tests.utils.payload_builders import one_to_all_payload
 
@@ -187,8 +188,9 @@ def test_one_to_all_integration_errors(coord):
     assert response.status_code == 422  # Unprocessable Entity for validation errors
 
 
+# WRITE RESPONSES
 # transport mode
-@pytest.mark.parametrize("origin_coord", COORDS)  # Limit for speed
+@pytest.mark.parametrize("origin_coord", fixture_coordinates)
 def test_one_to_all_plausibility(origin_coord, response_writer):
     """
     Performs a real end-to-end test against the live MOTIS service for /one-to-all.
@@ -198,7 +200,7 @@ def test_one_to_all_plausibility(origin_coord, response_writer):
     origin, _ = origin_coord
     request_payload = one_to_all_payload(
         start_location=origin,
-        max_travel_time=60,
+        max_travel_time=90,
     )
 
     response = client.post(settings.ONETOALL_ROUTE, json=request_payload)

@@ -19,7 +19,7 @@ stress_test_logger = logging.getLogger("stress_test")
 stress_test_logger.setLevel(logging.INFO)
 
 # Create a handler to write logs to a file
-log_handler = logging.FileHandler("logs/stress_test_log.log", mode="w")
+log_handler = logging.FileHandler(RESULT_DIR + "/logs/stress_test.log", mode="w")
 log_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 log_handler.setFormatter(log_formatter)
 stress_test_logger.addHandler(log_handler)

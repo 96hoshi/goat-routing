@@ -18,7 +18,7 @@ def motis_payload(
     """
     Build a payload for the Motis routing API.
     """
-    detailed = "true" if detailed_transfers else "false"
+    detailed: str = "true" if detailed_transfers else "false"
 
     payload = {
         "fromPlace": origin,
@@ -26,6 +26,7 @@ def motis_payload(
         "time": time,
         "detailedTransfers": detailed,
         "numItineraries": maxItineraries,
+        "maxItineraries": maxItineraries,
         **kwargs,
     }
     return {k: v for k, v in payload.items() if v is not None}

@@ -274,3 +274,23 @@ germany_coordinates = [
         "53.475653,9.704257",  # Buxtehude Bahnhof
     ),  # Hamburg Hbf → Buxtehude Bahnhof (~30 km)
 ]
+
+fixture_coordinates = {
+    # try to cover various regions in Germany for MOTIS adapter tests
+    (
+        "49.489590,8.467236",  # Wasserturm
+        "49.538300,8.574100",  # Viernheim (outside Mannheim, reachable by tram)
+    ),  # Wasserturm → Viernheim
+    (
+        "48.784013,9.176985",  # Stuttgart Hauptbahnhof
+        "48.692226,9.014605",  # Böblingen Bahnhof
+    ),  # Stuttgart Hbf → Böblingen Bahnhof (~20 km)
+    (
+        "48.140228,11.558330",  # München Hauptbahnhof
+        "48.243644,11.890691",  # Erding Bahnhof
+    ),  # Munich Hbf → Erding Bahnhof (~36 km)
+    (
+        "53.552809,9.979069",  # Hamburg Hauptbahnhof
+        "52.525592,13.369545",  # Berlin Hauptbahnhof
+    ),  # Hamburg Hbf → Berlin Hbf (~280 km)
+}

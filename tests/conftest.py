@@ -10,7 +10,7 @@ TIME_BENCH: str = (datetime.utcnow() + timedelta(days=1)).replace(
     hour=8, minute=0, second=0, microsecond=0
 ).isoformat() + "Z"
 
-RESULT_DIR = "tests/results/"
+RESULT_DIR = "results/"
 IMAGES_DIR = os.path.join(RESULT_DIR, "images")
 RESPONSES_DIR = os.path.join(RESULT_DIR, "responses")
 BENCHMARK_DIR = os.path.join(RESULT_DIR, "benchmarks")

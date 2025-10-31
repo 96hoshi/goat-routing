@@ -7,12 +7,13 @@ from tests.utils.benchmark_helpers import (
 from tests.utils.commons import (
     coordinates_list,
     get_service_by_name,
+    get_test_coordinates,
 )
 
 COORDS = coordinates_list[:10]  # Limit for speed
 
 
-@pytest.mark.parametrize("coord", COORDS)
+@pytest.mark.parametrize("coord", get_test_coordinates("isochrone"))
 @pytest.mark.parametrize("service", get_service_by_name("motis"))
 def test_container_service_benchmark(
     benchmark,
@@ -27,7 +28,7 @@ def test_container_service_benchmark(
     origin, _ = coord
     payload = service["onetoall_payload_builder"](
         start_location=origin,
-        max_travel_time=60,
+        max_travel_time=90,
     )
 
     # Part 1: Pure latency benchmark

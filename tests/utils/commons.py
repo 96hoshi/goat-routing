@@ -1,5 +1,3 @@
-import os
-
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -8,6 +6,7 @@ from src.core.config import settings
 from src.endpoints.v2.routing import router
 from tests.coords.lists import (
     aachen_coordinates,
+    fixture_coordinates,
     germany_coordinates,
     mannheim_coordinates,
 )
@@ -27,7 +26,7 @@ COORDINATE_MAP = {
     "germany": germany_coordinates,
     "mannheim": mannheim_coordinates,
     "aachen": aachen_coordinates,
-    "test": mannheim_coordinates[:3],
+    "isochrone": fixture_coordinates,
 }
 
 
@@ -40,19 +39,12 @@ client = TestClient(app)
 external_client = httpx.Client()
 
 
-def get_test_coordinates():
-    """Get coordinates based on environment setting."""
-    coord_type = os.getenv("TEST_COORDS", "germany")
-
-    if coord_type not in COORDINATE_MAP:
-        print(f"⚠️ Unknown TEST_COORDS '{coord_type}', using 'germany'")
-        coord_type = "germany"
-
-    coords = COORDINATE_MAP[coord_type]
-    return coords
+def get_test_coordinates(name):
+    """Retrieve test coordinates based on the given name."""
+    return COORDINATE_MAP.get(name, fixture_coordinates)
 
 
-coordinates_list = get_test_coordinates()
+coordinates_list = get_test_coordinates("isochrone")
 
 # ----------------- Define routing services configurations ----------------- #
 SERVICES = [

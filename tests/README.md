@@ -86,13 +86,13 @@ This script will:
 
 ### Generated Files
 
-- **Benchmark results:** `tests/results/benchmark_results.csv`
-- **Service comparison:** `tests/results/service_comparison_results.csv` 
-- **Transport comparison:** `tests/results/transport_routes_comparison.csv`
-- **Driving comparison:** `tests/results/driving_routes_comparison.csv`
-- **Response files:** `tests/results/responses/`
-- **Visualization plots:** `tests/results/images/*.png`
-- **Execution report:** `tests/results/test_execution_report.md`
+- **Benchmark results:** `results/benchmark_results.csv`
+- **Service comparison:** `results/service_comparison_results.csv` 
+- **Transport comparison:** `results/transport_routes_comparison.csv`
+- **Driving comparison:** `results/driving_routes_comparison.csv`
+- **Response files:** `results/responses/`
+- **Visualization plots:** `results/images/*.png`
+- **Execution report:** `results/test_execution_report.md`
 
 ### Compare Benchmarks
 
@@ -104,7 +104,7 @@ pytest-benchmark compare .benchmarks/<run>.json
 
 ```sh
 # List all generated plots
-ls -la tests/results/images/
+ls -la results/images/
 ```
 ## Comparing and Visualizing Routing Services
 

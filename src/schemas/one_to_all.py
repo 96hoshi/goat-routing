@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -36,18 +36,12 @@ class OneToAllRequest(BaseModel):
         description="Start time for the search in ISO 8601 format. Defaults to the current time.",
     )
     duration_limit: int = Field(
-        ...,
+        default=90,
         alias="maxTravelTime",
         title="Duration Limit (seconds)",
         description="The maximum travel duration in seconds to search for.",
         gt=0,  # Duration must be greater than 0
         examples=[3600],
-    )
-    transit_modes: Optional[List[MotisMode]] = Field(
-        default_factory=lambda: [MotisMode.WALK, MotisMode.TRANSIT],
-        alias="transitModes",
-        title="Transit Modes",
-        description="A list of transit modes to be used in the search.",
     )
 
     class Config:

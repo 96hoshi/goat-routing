@@ -179,7 +179,7 @@ def measure_container_performance(
     endpoint: str,
     payload: dict,
     method: str = "POST",
-) -> BenchmarkResult | None:
+) -> BenchmarkResult:
     """
     Measures both request latency and target container resource usage.
     """
@@ -197,8 +197,7 @@ def measure_container_performance(
     # 2. Get container stats BEFORE the request
     stats_before = container.stats(stream=False)
 
-    # 3. USE YOUR EXISTING FUNCTION to run the web request
-    # This measures latency and response size
+    # 3. This measures latency and response size
     request_metrics = _measure_request(client, endpoint, payload, method)
 
     # 4. Get container stats AFTER the request
